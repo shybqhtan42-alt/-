@@ -48,3 +48,13 @@ button, input, select, textarea, h1, h2, h3, h4, h5, h6, p, span, a, label {
   }
 }
 
+/* Hide Netlify badge, footer branding, and support links */
+#netlify-badge,
+footer img[alt*="Netlify"],
+a[href*="netlify.com/support"],
+[data-netlify-badge],
+.netlify-badge {
+  display: none !important;
+}
+
+
