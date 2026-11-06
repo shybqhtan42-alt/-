@@ -1,0 +1,6 @@
+{
+  "name": "منصة البشير التعليمية",
+  "description": "منصة البشير التعليمية - إعداد: صهيب القحطاني، مدرسة عبد الملك بن مروان. منصة متكاملة للطلاب وللمدير لعرض الملخصات الدراسية وإدارة الطلاب.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

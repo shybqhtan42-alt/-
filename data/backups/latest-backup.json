@@ -1,0 +1,139 @@
+{
+  "config": {
+    "platformTitle": "البشير التعليمي",
+    "schoolName": "مدرسة عبد الملك بن مروان",
+    "authorName": "صهيب القحطاني",
+    "studentSchoolCode": "27274",
+    "managerSchoolCode": "67890",
+    "yearGregorian": "2026",
+    "yearHijri": "1448",
+    "studentLoginMode": "full_credentials",
+    "isManagerConfigured": true,
+    "lastUpdatedTimestamp": 1793969669935,
+    "customShareUrl": "",
+    "customLogoUrl": "",
+    "customBannerUrl": "",
+    "customBannerTitle": "ملخصات وافية وشاملة لكل مواد الفصل",
+    "customBannerSubtitle": "مدرسة عبد الملك بن مروان",
+    "isGamesTabEnabled": false,
+    "gameDefaultWeather": "night",
+    "gameDefaultTime": "night",
+    "isAppBackgroundEnabled": true,
+    "appBackgroundUrl": "/images/calm_study_window_books.jpg",
+    "appBackgroundOpacity": 0.9,
+    "appBackgroundBlur": 0,
+    "appBackgroundTheme": "calm_study",
+    "madrasatiUrl": "https://schools.madrasati.sa/login?Language=1",
+    "isFilePreviewEnabled": true,
+    "isLatestSpotlightEnabled": false,
+    "isHomeNavButtonsEnabled": true
+  },
+  "students": [
+    {
+      "fullName": "زياد علي عسيري",
+      "username": "ziyad",
+      "password": "123",
+      "grade": "ثاني متوسط",
+      "id": "std-1793564547052-tv2s",
+      "registeredAt": "١‏/١١‏/٢٠٢٦"
+    }
+  ],
+  "summaries": [
+    {
+      "title": "مشروع الوحدة الرابعة",
+      "grade": "ثاني متوسط",
+      "subject": "اللغة الإنجليزية",
+      "category": "أوراق عمل",
+      "summaryText": "مشروع الوحدة الرابعة",
+      "attachmentName": "0000000e194820badf1696b1ed796e4.png",
+      "attachmentType": "image",
+      "isImportant": true,
+      "id": "sum-1793564607665-y8fg",
+      "dateAdded": "1448 هـ / 2026 م",
+      "attachmentUrl": "/uploads/0000000e194820badf1696b1ed796e4.png"
+    },
+    {
+      "title": "ورقة عمل: الخلية والوراثة",
+      "subject": "العلوم",
+      "grade": "ثاني متوسط",
+      "category": "أوراق عمل",
+      "summaryText": "ورقة عمل تدريبية لقياس مهارات وحدة الخلية والوراثة لصف ثاني متوسط.",
+      "id": "sum-1792690316763-vppp",
+      "dateAdded": "1448 هـ / 2026 م"
+    },
+    {
+      "id": "sum-1",
+      "title": "ملخص شامل: الجهاز العصبي والغدد الصماء",
+      "grade": "ثاني متوسط",
+      "subject": "العلوم",
+      "category": "الملخصات",
+      "summaryText": "• يتكون الجهاز العصبي المركزي من الدماغ والحبل الشوكي.\n• الوحدة البنائية الأساسية للجهاز العصبي هي الخلية العصبية (العصبون).\n• يتكون العصبون من: جسم الخلية، والزوائد الشجيرية، والمحور العصبي.\n• الغدد الصماء تفرز الهرمونات مباشرة في مجرى الدم لتنظيم وظائف الجسم الحيوية.\n• الغدة النخامية تسمى \"سيدة الغدد\" لأنها تفرز هرمونات تنظم عمل الغدد الصماء الأخرى.",
+      "attachmentType": "text",
+      "attachmentName": "ملخص_العلوم_ثاني_متوسط.pdf",
+      "dateAdded": "1448 هـ / 2026 م",
+      "isImportant": true,
+      "isExclusive": true
+    },
+    {
+      "id": "sum-2",
+      "title": "ملخص نظرية فيثاغورس والأعداد الحقيقية",
+      "grade": "ثاني متوسط",
+      "subject": "الرياضيات",
+      "category": "الملخصات",
+      "summaryText": "• تنص نظرية فيثاغورس على: في أي مثلث قائم الزاوية، مربع طول الوتر يساوي مجموع مربعي طولي الضلعين الآخرين (ج² = أ² + ب²).\n• الوتر هو الضلع المقابل للزاوية القائمة وهو أطول أضلاع المثلث القائم.\n• الأعداد الحقيقية تتضمن الأعداد النسبية (الكسور والأعداد العشرية المنتهية أو الدورية) والأعداد غير النسبية (الجذور التربيعية للأعداد غير المربعة مثل √2).\n• أمثلة مشهورة لثلاثيات فيثاغورس: (3، 4، 5) و (5، 12، 13).",
+      "attachmentType": "text",
+      "attachmentName": "قوانين_الرياضيات_الفصل_الأول.pdf",
+      "dateAdded": "1448 هـ / 2026 م",
+      "isImportant": true,
+      "isExclusive": true
+    },
+    {
+      "id": "sum-3",
+      "title": "ملخص قواعد لغتي: الفاعل ونائب الفاعل والمفعول به",
+      "grade": "ثاني متوسط",
+      "subject": "لغتي الخالدة",
+      "category": "الملخصات",
+      "summaryText": "• الفاعل: اسم مرفوع يدل على من قام بالفعل أو اتصف به (علامات رفعه: الضمة للمفرد وجمع التكسير وجمع المؤنث السالم، الألف للمثنى، الواو لجمع المذكر السالم والأسماء الخمسة).\n• نائب الفاعل: اسم مرفوع يحل محل الفاعل بعد حذفه وبناء الفعل للمجهول (يُضم أول الفعل الماضي ويُكسر ما قبل آخره، ويُضم أول الفعل المضارع ويُفتح ما قبل آخره).\n• المفعول به: اسم منصوب يدل على من وقع عليه فعل الفاعل.",
+      "attachmentType": "text",
+      "attachmentName": "ملخص_قواعد_لغتي_الخالدة.pdf",
+      "dateAdded": "1448 هـ / 2026 م",
+      "isImportant": false,
+      "isExclusive": false
+    },
+    {
+      "id": "sum-4",
+      "title": "ورقة عمل مادة الدراسات الاجتماعية - محلول",
+      "grade": "ثاني متوسط",
+      "subject": "الاجتماعيات",
+      "category": "أوراق عمل",
+      "summaryText": "• ورقة عمل مادة الدراسات الاجتماعية لصف ثاني متوسط مع الحل والنموذج الرسمي المعتمد.\n• تشمل أسئلة الاختيار من متعدد، وضع علامة صح أو خطأ، وإكمال الفراغات والأسئلة المقالية لجميع وحدات الفصل.\n• متاح كملف PDF رسمي كامل جاهز للتصفح والتحميل المباشر.",
+      "attachmentType": "pdf",
+      "attachmentName": "ورقة_عمل_الدراسات_الاجتماعية_محلول.pdf",
+      "attachmentUrl": "/uploads/social_studies_worksheet_solved.pdf",
+      "dateAdded": "1448 هـ / 2026 م",
+      "isImportant": true,
+      "isExclusive": true
+    },
+    {
+      "id": "sum-5",
+      "title": "ملخص التوحيد والفقه: أصول الإيمان ومقاصد الشريعة",
+      "grade": "ثاني متوسط",
+      "subject": "الدراسات الإسلامية",
+      "category": "الملخصات",
+      "summaryText": "• أركان الإيمان ستة: الإيمان بالله، وملائكته، وكتبه، ورسله، واليوم الآخر، والقدر خيره وشره.\n• أحكام الصيام وأعذار الفطر المبيحة في السفر والمرض.\n• أهمية بر الوالدين وحسن الخلق في المعاملات اليومية.",
+      "attachmentType": "text",
+      "attachmentName": "ملخص_الدراسات_الإسلامية.pdf",
+      "dateAdded": "1448 هـ / 2026 م",
+      "isImportant": false,
+      "isExclusive": false
+    }
+  ],
+  "deletedSummaryIds": [],
+  "deletedStudentIds": [
+    "std-1793564992227-1ics"
+  ],
+  "version": 21,
+  "lastUpdated": "2026-11-06T12:54:29.935Z",
+  "lastUpdatedTimestamp": 1793969669935,
+  "isManagerConfigured": true
+}
