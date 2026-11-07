@@ -97,7 +97,7 @@ export async function downloadSummaryDocument(
   // This document has INLINE STYLES, embedded Arabic styling, no external dependencies,
   // and renders 100% perfectly in Google Chrome, phone file viewers, Google Drive,
   // and includes a one-click Print / Save as PDF button.
-  const filename = `${safeTitle} - ${summary.subject} - ثاني متوسط.html`;
+  const filename = `${safeTitle} - ${summary.subject} - ${summary.grade || 'المقرر'}.html`;
 
   const htmlContent = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">

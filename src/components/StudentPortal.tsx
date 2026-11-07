@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SummaryItem, CurrentUser, SchoolConfig } from '../types';
+import { SummaryItem, CurrentUser, SchoolConfig, AVAILABLE_GRADES } from '../types';
 import { 
   BookOpen, 
   Search, 
@@ -114,8 +114,24 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   onToggleFavorite,
   onOpenLogin,
 }) => {
-  // Navigation states
-  const [selectedGrade, setSelectedGrade] = useState<string>('ثاني متوسط');
+  // Navigation states: Lock registered student to their specific assigned grade
+  const isRegisteredStudent = currentUser.role === 'student' && Boolean(currentUser.student?.grade);
+  const studentRegisteredGrade = currentUser.student?.grade;
+  const initialGrade = isRegisteredStudent && studentRegisteredGrade
+    ? studentRegisteredGrade
+    : (config.defaultGrade || 'أول متوسط');
+
+  const [selectedGrade, setSelectedGrade] = useState<string>(initialGrade);
+
+  // Synchronize when student credentials or config default grade updates
+  React.useEffect(() => {
+    if (isRegisteredStudent && studentRegisteredGrade) {
+      setSelectedGrade(studentRegisteredGrade);
+    } else if (config.defaultGrade) {
+      setSelectedGrade(config.defaultGrade);
+    }
+  }, [isRegisteredStudent, studentRegisteredGrade, config.defaultGrade]);
+
   // selectedSubject: if null, shows all subject cards as requested: "تطلع الخيارات المواد الذي يريدها"
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   // Content categories: 'الكل' | 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية'
@@ -215,8 +231,15 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight text-white leading-tight break-words">
               {currentUser.role === 'student' && currentUser.student
                 ? `مرحباً بك يا بطل: ${currentUser.student.fullName}`
-                : `منصة ${config.platformTitle} - الصف ثاني متوسط`}
+                : `منصة ${config.platformTitle} - ${selectedGrade}`}
             </h1>
+
+            {isRegisteredStudent && (
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-md rounded-xl text-xs font-black text-amber-200 border border-white/20 mt-1">
+                <GraduationCap className="w-4 h-4 text-amber-300" />
+                <span>الصف الدراسي المعتمد لك: {selectedGrade}</span>
+              </div>
+            )}
 
             <p className="text-xs sm:text-sm text-emerald-100 leading-relaxed">
               اختر المادة الدراسية التي تريدها، ثم حدد ما إذا كنت تريد <strong>أوراق العمل</strong>، <strong>الملخصات</strong>، أو <strong>الكتب الدراسية</strong> لتصل إلى مادتك مباشرة.
@@ -249,6 +272,34 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
         </div>
       </div>
 
+      {/* Grade Selector Bar for Guests and Manager (Registered student is locked to their assigned grade) */}
+      {!isRegisteredStudent && (
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-slate-800 text-xs font-bold">
+            <GraduationCap className="w-4 h-4 text-emerald-700" />
+            <span>تصفح حسب الصف الدراسي:</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {AVAILABLE_GRADES.map((g) => (
+              <button
+                key={g}
+                onClick={() => {
+                  setSelectedGrade(g);
+                  setSelectedSubject(null);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                  selectedGrade === g
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                }`}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* STEP 1: SUBJECT SELECTION (تطلع له خيارات المواد الذي يريدها) */}
       {!selectedSubject ? (
         <div className="space-y-4">
@@ -259,7 +310,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                 <span>الخطوة 1: اختيار المادة الدراسية</span>
               </div>
               <h2 className="text-lg font-black text-slate-900">
-                اختر المادة الدراسية لصف ثاني متوسط:
+                اختر المادة الدراسية لصف {selectedGrade}:
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 انقر على المادة التي تريدها للاطلاع على أوراق العمل والملخصات والكتب الدراسية الخاصة بها.
@@ -405,7 +456,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                   <span>مكتبة مدرسة عبد الملك بن مروان الرقمية</span>
                 </div>
                 <h3 className="text-sm sm:text-lg font-black text-white">
-                  ملخصات وكتب دراسية معتمدة لكافة مواد الصف الثاني المتوسط
+                  ملخصات وكتب دراسية معتمدة لكافة مواد {selectedGrade}
                 </h3>
                 <p className="text-[10px] sm:text-xs text-slate-200 leading-relaxed max-w-xl">
                   اختر أي مادة دراسية أعلاه لبدء استعراض أوراق العمل والملخصات والكتب المقررة.
@@ -434,7 +485,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                 <div className="text-base font-black text-slate-900 flex items-center gap-2">
                   <span>{selectedSubject === 'الكل' ? 'جميع المواد الدراسية' : `مادة ${selectedSubject}`}</span>
                   <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
-                    ثاني متوسط
+                    {selectedGrade}
                   </span>
                 </div>
               </div>
@@ -469,7 +520,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
           {/* THE 3 CATEGORY OPTIONS AS SPECIFIED: اوراق العمل - ملخصات - الكتب الدراسية */}
           <div className="space-y-3">
             <div className="text-xs font-bold text-slate-700 px-1">
-              اختر نوع المحتوى الذي تريده لمادة ({selectedSubject === 'الكل' ? 'ثاني متوسط' : selectedSubject}):
+              اختر نوع المحتوى الذي تريده لمادة ({selectedSubject === 'الكل' ? selectedGrade : selectedSubject}):
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">

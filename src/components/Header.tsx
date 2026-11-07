@@ -24,6 +24,10 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [emblemError, setEmblemError] = useState(false);
 
+  const activeGrade = currentUser.role === 'student' && currentUser.student?.grade
+    ? currentUser.student.grade
+    : (config.defaultGrade || 'أول متوسط');
+
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 w-full overflow-hidden">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2 sm:gap-6">
@@ -85,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'hover:text-emerald-800'
             }`}
           >
-            ثاني متوسط
+            {activeGrade}
           </button>
 
           <button
@@ -197,7 +201,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => setActiveTab('second-intermediate')}
           className={`px-2.5 py-1.5 rounded-lg transition-colors ${activeTab === 'second-intermediate' ? 'text-emerald-950 font-black bg-emerald-100 border border-emerald-300/60 shadow-2xs' : 'hover:bg-slate-100'}`}
         >
-          ثاني متوسط
+          {activeGrade}
         </button>
         <button
           onClick={() => setActiveTab('summaries')}

@@ -26,7 +26,8 @@
     "madrasatiUrl": "https://schools.madrasati.sa/login?Language=1",
     "isFilePreviewEnabled": true,
     "isLatestSpotlightEnabled": false,
-    "isHomeNavButtonsEnabled": true
+    "isHomeNavButtonsEnabled": true,
+    "defaultGrade": "أول متوسط"
   },
   "students": [
     {

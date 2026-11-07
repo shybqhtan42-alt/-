@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Student, SummaryItem, SchoolConfig } from '../types';
+import { Student, SummaryItem, SchoolConfig, AVAILABLE_GRADES } from '../types';
 import { storageService } from '../services/storageService';
 import { 
   Users, 
@@ -68,8 +68,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [studentFullName, setStudentFullName] = useState('');
   const [studentUsername, setStudentUsername] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
-  const [studentGrade, setStudentGrade] = useState('ثاني متوسط');
+  const [studentGrade, setStudentGrade] = useState<string>(config.defaultGrade || 'أول متوسط');
   const [studentSearch, setStudentSearch] = useState('');
+  const [studentGradeFilter, setStudentGradeFilter] = useState<string>('الكل');
 
   // Summary / File Form State
   const [isAddingSummary, setIsAddingSummary] = useState(false);
@@ -77,12 +78,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const isSubmittingSummaryRef = React.useRef(false);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [summaryTitle, setSummaryTitle] = useState('');
-  const [summaryGrade, setSummaryGrade] = useState('ثاني متوسط');
+  const [summaryGrade, setSummaryGrade] = useState<string>(config.defaultGrade || 'أول متوسط');
   const [summarySubject, setSummarySubject] = useState('العلوم');
   const [summaryCategory, setSummaryCategory] = useState<'ملخصات' | 'أوراق عمل' | 'الكتب الدراسية'>('ملخصات');
   const [summaryText, setSummaryText] = useState('');
   const [summaryIsImportant, setSummaryIsImportant] = useState<boolean>(true);
   const [summaryFilterTab, setSummaryFilterTab] = useState<'all' | 'important'>('all');
+  const [summaryGradeFilter, setSummaryGradeFilter] = useState<string>('الكل');
   const [attachmentUrl, setAttachmentUrl] = useState<string>('');
   const [attachmentBase64, setAttachmentBase64] = useState<string>('');
   const [attachmentName, setAttachmentName] = useState<string>('');
@@ -447,7 +449,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       return;
     }
 
-    const finalText = summaryText.trim() || (attachmentName ? `مرفق ملف تعليمي: ${attachmentName}` : 'محتوى دراسي معتمد لصف ثاني متوسط');
+    const finalText = summaryText.trim() || (attachmentName ? `مرفق ملف تعليمي: ${attachmentName}` : `محتوى دراسي معتمد لصف ${summaryGrade}`);
 
     isSubmittingSummaryRef.current = true;
     setIsSubmittingSummary(true);
@@ -585,11 +587,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     showToast(toastMsg);
   };
 
-  const filteredStudents = students.filter(
-    (s) =>
+  const filteredStudents = students.filter((s) => {
+    const matchesSearch =
       s.fullName.toLowerCase().includes(studentSearch.toLowerCase()) ||
-      s.username.toLowerCase().includes(studentSearch.toLowerCase())
-  );
+      s.username.toLowerCase().includes(studentSearch.toLowerCase());
+    const matchesGrade = studentGradeFilter === 'الكل' || s.grade === studentGradeFilter;
+    return matchesSearch && matchesGrade;
+  });
 
   return (
     <div className="space-y-6">
@@ -612,7 +616,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             لوحة تحكم المدير - {config.schoolName}
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            إدارة الطلاب والأسماء، تعديل رمز المدرسة، وإضافة الملفات والصور والملخصات لصف ثاني متوسط.
+            إدارة الطلاب والأسماء، تعديل رمز المدرسة، وإضافة الملفات والصور والملخصات المعتمدة (من السادس إلى الثالث المتوسط).
           </p>
         </div>
 
@@ -794,16 +798,50 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             </button>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-            <div className="relative flex-1 max-w-sm">
-              <input
-                type="text"
-                value={studentSearch}
-                onChange={(e) => setStudentSearch(e.target.value)}
-                placeholder="ابحث بالاسم أو اسم المستخدم..."
-                className="w-full pl-3 pr-9 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:border-emerald-600"
-              />
-              <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 flex-1">
+              <div className="relative min-w-[200px] flex-1 max-w-sm">
+                <input
+                  type="text"
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  placeholder="ابحث بالاسم أو اسم المستخدم..."
+                  className="w-full pl-3 pr-9 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:border-emerald-600"
+                />
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+              </div>
+
+              {/* Grade filter pills */}
+              <div className="flex flex-wrap items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setStudentGradeFilter('الكل')}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    studentGradeFilter === 'الكل'
+                      ? 'bg-slate-800 text-white shadow-xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  الكل ({students.length})
+                </button>
+                {AVAILABLE_GRADES.map((g) => {
+                  const count = students.filter((s) => s.grade === g).length;
+                  return (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setStudentGradeFilter(g)}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        studentGradeFilter === g
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {g} ({count})
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <button
@@ -812,10 +850,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 setStudentFullName('');
                 setStudentUsername('');
                 setStudentPassword('');
-                setStudentGrade('ثاني متوسط');
+                setStudentGrade(config.defaultGrade || 'أول متوسط');
                 setIsAddingStudent(!isAddingStudent);
               }}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs shrink-0 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>{isAddingStudent ? 'إلغاء' : 'إضافة طالب جديد'}</span>
@@ -861,9 +899,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                     onChange={(e) => setStudentGrade(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:border-emerald-600 font-semibold"
                   >
-                    <option value="ثاني متوسط">ثاني متوسط</option>
-                    <option value="أول متوسط">أول متوسط</option>
-                    <option value="ثالث متوسط">ثالث متوسط</option>
+                    {AVAILABLE_GRADES.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -1016,7 +1054,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="font-bold text-slate-900 text-sm">
-                ملخصات ومذكرات الطلاب (ثاني متوسط)
+                ملخصات ومذكرات الطلاب المعتمدة (من السادس إلى الثالث المتوسط)
               </h3>
               <p className="text-xs text-slate-500">
                 أضف ملخصات أو صور مذكرات أو ملفات تظهر فوراً للطلاب في المنصة.
@@ -1060,7 +1098,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
               <button
                 onClick={() => setIsAddingSummary(!isAddingSummary)}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>{isAddingSummary ? 'إلغاء' : 'إضافة ملخص / ملف جديد'}</span>
@@ -1086,9 +1124,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       onChange={(e) => setSummaryGrade(e.target.value)}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:border-emerald-600"
                     >
-                      <option value="ثاني متوسط">ثاني متوسط (الأساسي)</option>
-                      <option value="أول متوسط">أول متوسط</option>
-                      <option value="ثالث متوسط">ثالث متوسط</option>
+                      {AVAILABLE_GRADES.map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -1254,12 +1292,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           )}
 
           {/* Summaries list filter header */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setSummaryFilterTab('all')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   summaryFilterTab === 'all'
                     ? 'bg-slate-800 text-white shadow-xs'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -1270,7 +1308,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setSummaryFilterTab('important')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   summaryFilterTab === 'important'
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'bg-amber-100/80 text-amber-900 hover:bg-amber-200'
@@ -1281,17 +1319,50 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   {summaries.filter(s => s.isImportant || s.isExclusive).length}
                 </span>
               </button>
+
+              {/* Grade filter pills for summaries */}
+              <div className="h-5 w-px bg-slate-200 mx-1 hidden sm:block" />
+              <div className="flex flex-wrap items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSummaryGradeFilter('الكل')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    summaryGradeFilter === 'الكل'
+                      ? 'bg-emerald-800 text-white shadow-xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  كافة الصفوف
+                </button>
+                {AVAILABLE_GRADES.map((g) => {
+                  const count = summaries.filter(s => s.grade === g).length;
+                  return (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setSummaryGradeFilter(g)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        summaryGradeFilter === g
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {g} ({count})
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <span className="text-[11px] text-slate-500 font-medium">
-              المعروض: {summaries.filter(s => summaryFilterTab === 'all' || s.isImportant || s.isExclusive).length} ملخص
+              المعروض: {summaries.filter(s => (summaryFilterTab === 'all' || s.isImportant || s.isExclusive) && (summaryGradeFilter === 'الكل' || s.grade === summaryGradeFilter)).length} ملخص
             </span>
           </div>
 
           {/* Summaries list */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {summaries
-              .filter(s => summaryFilterTab === 'all' || s.isImportant || s.isExclusive)
+              .filter(s => (summaryFilterTab === 'all' || s.isImportant || s.isExclusive) && (summaryGradeFilter === 'الكل' || s.grade === summaryGradeFilter))
               .map((sum) => {
                 const isImp = Boolean(sum.isImportant || sum.isExclusive);
                 return (
@@ -2187,7 +2258,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   السنة الميلادية لحقوق الطبع
@@ -2220,6 +2291,33 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   onBlur={(e) => handleAutoSaveField('yearHijri', e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:bg-white focus:border-emerald-600"
                 />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-900">
+                    الصف الدراسي المعتمد للمنصة
+                  </label>
+                  <span className="text-[10px] text-emerald-700 font-bold">تطبيق فوري</span>
+                </div>
+                <select
+                  value={settingsForm.defaultGrade || config.defaultGrade || 'أول متوسط'}
+                  onChange={(e) => {
+                    const chosen = e.target.value;
+                    setIsSettingsDirty(true);
+                    setSettingsForm({ ...settingsForm, defaultGrade: chosen });
+                    handleToggleSettingInstant(
+                      'defaultGrade',
+                      chosen,
+                      `تم اعتماد (${chosen}) كصف دراسي رئيسي للمنصة ونشره فوراً!`
+                    );
+                  }}
+                  className="w-full px-3 py-2 bg-emerald-50 border-2 border-emerald-400 rounded-xl text-xs font-black text-emerald-950 focus:bg-white focus:border-emerald-600 cursor-pointer"
+                >
+                  {AVAILABLE_GRADES.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

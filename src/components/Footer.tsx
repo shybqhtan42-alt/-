@@ -79,7 +79,7 @@ export const Footer: React.FC<FooterProps> = ({ config, onOpenQR }) => {
               </div>
             </div>
             <p className="text-xs text-emerald-300/80 leading-relaxed pt-1">
-              منصة تعليمية متطورة لتسهيل وصول الطلاب للملخصات والمذكرات الدراسية المعتمدة لصف ثاني متوسط.
+              منصة تعليمية متطورة لتسهيل وصول الطلاب للملخصات والمذكرات الدراسية المعتمدة من الصف السادس إلى الثالث المتوسط.
             </p>
           </div>
 

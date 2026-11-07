@@ -105,7 +105,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({
             onClick={onGoToSecondIntermediate}
             className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
           >
-            الانتقال إلى ملخصات ثاني متوسط
+            الانتقال إلى الملخصات الدراسية المعتمدة
           </button>
         </div>
       </div>

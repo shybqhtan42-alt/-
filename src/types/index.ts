@@ -52,7 +52,17 @@ export interface SchoolConfig {
   isFilePreviewEnabled?: boolean;
   isLatestSpotlightEnabled?: boolean;
   isHomeNavButtonsEnabled?: boolean;
+  defaultGrade?: string; // 'سادس ابتدائي' | 'أول متوسط' | 'ثاني متوسط' | 'ثالث متوسط'
 }
+
+export const AVAILABLE_GRADES = [
+  'سادس ابتدائي',
+  'أول متوسط',
+  'ثاني متوسط',
+  'ثالث متوسط',
+] as const;
+
+export type GradeType = typeof AVAILABLE_GRADES[number];
 
 export interface GameViolation {
   id: string;

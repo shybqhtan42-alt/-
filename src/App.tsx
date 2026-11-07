@@ -36,9 +36,12 @@ export default function App() {
   const [favorites, setFavorites] = useState<string[]>(() => storageService.getFavorites());
   const [onlineStudentIds, setOnlineStudentIds] = useState<string[]>([]);
 
-  // Navigation tabs: 'home' | 'second-intermediate' | 'summaries' | 'manager-panel' | 'about'
   const [activeTab, setActiveTab] = useState<string>('home');
   const [navigatingBtnId, setNavigatingBtnId] = useState<string | null>(null);
+
+  const activeGrade = currentUser.role === 'student' && currentUser.student?.grade
+    ? currentUser.student.grade
+    : (config.defaultGrade || 'أول متوسط');
 
   // Modals
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -267,7 +270,7 @@ export default function App() {
                   </div>
 
                   <p className="text-xs sm:text-base text-slate-800 font-semibold leading-relaxed max-w-xl pt-1 sm:pt-2">
-                    البيئة المعتمدة لطلاب <strong className="text-slate-950 font-black">مدرسة عبد الملك بن مروان</strong>. المنصة مرتبة ومنظمة وخالية من أي بيانات عشوائية، توفر ملخصات ومذكرات وافية لكافة مواد <strong className="text-slate-950 font-black">الصف الثاني المتوسط</strong>، مع ميزة حصرية للمسجلين للوصول إلى <strong className="text-emerald-900 font-black">الملخصات المهمة</strong>.
+                    البيئة المعتمدة لطلاب <strong className="text-slate-950 font-black">{config.schoolName}</strong>. المنصة مرتبة ومنظمة وخالية من أي بيانات عشوائية، توفر ملخصات ومذكرات وافية لكافة مواد <strong className="text-slate-950 font-black">{activeGrade}</strong>، مع ميزة حصرية للمسجلين للوصول إلى <strong className="text-emerald-900 font-black">الملخصات المهمة</strong>.
                   </p>
                 </div>
 
@@ -278,7 +281,7 @@ export default function App() {
                     className="flex items-center justify-center gap-2 px-5 sm:px-6 py-3 sm:py-3.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl shadow-md transition-all text-center"
                   >
                     <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-                    <span>دخول ملخصات ثاني متوسط</span>
+                    <span>دخول ملخصات {activeGrade}</span>
                     <ArrowLeft className="w-4 h-4 mr-1 shrink-0" />
                   </button>
 
@@ -312,7 +315,7 @@ export default function App() {
                 <div className="pt-4 border-t border-slate-200/90 flex flex-wrap items-center gap-6 text-xs sm:text-sm text-slate-800 font-bold">
                   <div className="flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                    <span>ملخصات معتمدة لثاني متوسط</span>
+                    <span>ملخصات معتمدة لـ{activeGrade}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
@@ -391,7 +394,7 @@ export default function App() {
                       </div>
                       <div>
                         <h3 className="text-xs sm:text-sm font-black text-emerald-950">
-                          ثاني متوسط
+                          {activeGrade}
                         </h3>
                         <p className="text-[10px] text-emerald-800 font-semibold line-clamp-1 mt-0.5">
                           المقررات والدروس المعتمدة
@@ -663,10 +666,10 @@ export default function App() {
                     <Layers className="w-5 h-5" />
                   </div>
                   <h3 className="font-black text-slate-950 text-sm sm:text-base group-hover:text-emerald-800 transition-colors">
-                    ثاني متوسط (الرئيسي)
+                    {activeGrade} (الرئيسي)
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-700 font-semibold mt-1.5 leading-relaxed line-clamp-2">
-                    المكتبة الشاملة لملخصات الصف الثاني المتوسط مع الشرح الوافي.
+                    المكتبة الشاملة لملخصات {activeGrade} مع الشرح الوافي.
                   </p>
                   <div className="mt-3 text-xs sm:text-sm font-black text-emerald-800 flex items-center gap-1">
                     <span>تصفح الملخصات</span>
