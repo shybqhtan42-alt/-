@@ -49,7 +49,7 @@ const DEFAULT_CONFIG = {
   isFilePreviewEnabled: true,
   isLatestSpotlightEnabled: false,
   isHomeNavButtonsEnabled: true,
-  defaultGrade: 'أول متوسط',
+  defaultGrade: 'ثاني متوسط',
 };
 
 const INITIAL_SUMMARIES = [
@@ -614,7 +614,7 @@ async function startServer() {
       studentLoginMode: incoming.studentLoginMode || db.config.studentLoginMode || 'full_credentials',
       isGamesTabEnabled: incoming.isGamesTabEnabled !== undefined ? Boolean(incoming.isGamesTabEnabled) : Boolean(db.config.isGamesTabEnabled),
       isLatestSpotlightEnabled: incoming.isLatestSpotlightEnabled !== undefined ? Boolean(incoming.isLatestSpotlightEnabled) : Boolean(db.config.isLatestSpotlightEnabled),
-      defaultGrade: incoming.defaultGrade || db.config.defaultGrade || 'أول متوسط',
+      defaultGrade: incoming.defaultGrade || db.config.defaultGrade || 'ثاني متوسط',
       isManagerConfigured: true,
       lastUpdatedTimestamp: timestamp,
     };

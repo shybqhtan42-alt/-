@@ -59,7 +59,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           fullName: 'طالب مدرسة عبد الملك بن مروان',
           username: 'student',
           password: '',
-          grade: config.defaultGrade || 'أول متوسط',
+          grade: config.defaultGrade || 'ثاني متوسط',
           registeredAt: `${config.yearHijri} هـ / ${config.yearGregorian} م`,
         });
         onClose();

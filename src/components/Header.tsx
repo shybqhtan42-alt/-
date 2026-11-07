@@ -26,7 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const activeGrade = currentUser.role === 'student' && currentUser.student?.grade
     ? currentUser.student.grade
-    : (config.defaultGrade || 'أول متوسط');
+    : (config.defaultGrade || 'ثاني متوسط');
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 w-full overflow-hidden">

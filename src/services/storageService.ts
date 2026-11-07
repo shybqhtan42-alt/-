@@ -42,7 +42,7 @@ export const DEFAULT_CONFIG: SchoolConfig = {
   isFilePreviewEnabled: true,
   isLatestSpotlightEnabled: false,
   isHomeNavButtonsEnabled: true,
-  defaultGrade: 'أول متوسط',
+  defaultGrade: 'ثاني متوسط',
 };
 
 // High quality initial educational summaries specifically prepared for ثاني متوسط

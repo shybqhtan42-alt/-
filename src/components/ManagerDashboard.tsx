@@ -68,7 +68,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [studentFullName, setStudentFullName] = useState('');
   const [studentUsername, setStudentUsername] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
-  const [studentGrade, setStudentGrade] = useState<string>(config.defaultGrade || 'أول متوسط');
+  const [studentGrade, setStudentGrade] = useState<string>(config.defaultGrade || 'ثاني متوسط');
   const [studentSearch, setStudentSearch] = useState('');
   const [studentGradeFilter, setStudentGradeFilter] = useState<string>('الكل');
 
@@ -78,7 +78,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const isSubmittingSummaryRef = React.useRef(false);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [summaryTitle, setSummaryTitle] = useState('');
-  const [summaryGrade, setSummaryGrade] = useState<string>(config.defaultGrade || 'أول متوسط');
+  const [summaryGrade, setSummaryGrade] = useState<string>(config.defaultGrade || 'ثاني متوسط');
   const [summarySubject, setSummarySubject] = useState('العلوم');
   const [summaryCategory, setSummaryCategory] = useState<'ملخصات' | 'أوراق عمل' | 'الكتب الدراسية'>('ملخصات');
   const [summaryText, setSummaryText] = useState('');
@@ -850,7 +850,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 setStudentFullName('');
                 setStudentUsername('');
                 setStudentPassword('');
-                setStudentGrade(config.defaultGrade || 'أول متوسط');
+                setStudentGrade(config.defaultGrade || 'ثاني متوسط');
                 setIsAddingStudent(!isAddingStudent);
               }}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs shrink-0 cursor-pointer"
@@ -2301,7 +2301,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   <span className="text-[10px] text-emerald-700 font-bold">تطبيق فوري</span>
                 </div>
                 <select
-                  value={settingsForm.defaultGrade || config.defaultGrade || 'أول متوسط'}
+                  value={settingsForm.defaultGrade || config.defaultGrade || 'ثاني متوسط'}
                   onChange={(e) => {
                     const chosen = e.target.value;
                     setIsSettingsDirty(true);

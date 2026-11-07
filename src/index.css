@@ -50,11 +50,22 @@ button, input, select, textarea, h1, h2, h3, h4, h5, h6, p, span, a, label {
 
 /* Hide Netlify badge, footer branding, and support links */
 #netlify-badge,
-footer img[alt*="Netlify"],
-a[href*="netlify.com/support"],
+.netlify-badge,
 [data-netlify-badge],
-.netlify-badge {
+footer img[alt*="Netlify"],
+a[href*="netlify.com"],
+[class*="netlify"],
+[id*="netlify"],
+[aria-label*="Netlify"],
+[title*="Netlify"] {
   display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  height: 0 !important;
+  width: 0 !important;
+  position: absolute !important;
+  z-index: -9999 !important;
 }
 
 

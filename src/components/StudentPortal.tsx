@@ -119,7 +119,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   const studentRegisteredGrade = currentUser.student?.grade;
   const initialGrade = isRegisteredStudent && studentRegisteredGrade
     ? studentRegisteredGrade
-    : (config.defaultGrade || 'أول متوسط');
+    : (config.defaultGrade || 'ثاني متوسط');
 
   const [selectedGrade, setSelectedGrade] = useState<string>(initialGrade);
 
