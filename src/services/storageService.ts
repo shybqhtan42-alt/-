@@ -1,4 +1,4 @@
-import { Student, SummaryItem, SchoolConfig, StudentLiveSession } from '../types';
+import { Student, SummaryItem, SchoolConfig, StudentLiveSession, StudentSuspension, StudentActivityLog } from '../types';
 
 const STORAGE_KEYS = {
   STUDENTS: 'al_basheer_students_v1',
@@ -326,6 +326,51 @@ export const storageService = {
     } catch (_) {}
   },
 
+  // Manager action: Kick/suspend a student for specified duration or indefinitely
+  async kickStudent(studentId: string, studentName: string, durationMinutes: number = 5, reason?: string): Promise<boolean> {
+    try {
+      const res = await fetch('/api/presence/kick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, studentName, durationMinutes, reason }),
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('Error kicking student:', e);
+      return false;
+    }
+  },
+
+  // Manager action: Reopen the platform / unkick the student immediately
+  async unkickStudent(studentId: string): Promise<boolean> {
+    try {
+      const res = await fetch('/api/presence/unkick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId }),
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('Error unkicking student:', e);
+      return false;
+    }
+  },
+
+  // Fetch student activity logs from server
+  async getStudentActivityLogs(studentId?: string): Promise<StudentActivityLog[]> {
+    try {
+      const url = studentId ? `/api/presence/logs?studentId=${encodeURIComponent(studentId)}` : '/api/presence/logs';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        return Array.isArray(data.logs) ? data.logs : [];
+      }
+    } catch (e) {
+      console.warn('Error fetching activity logs:', e);
+    }
+    return [];
+  },
+
   // Notify server when student logs out or leaves
   sendOffline(studentId: string): void {
     if (!studentId) return;
@@ -351,6 +396,7 @@ export const storageService = {
     summaries: SummaryItem[];
     onlineStudentIds: string[];
     onlineSessions?: StudentLiveSession[];
+    suspensions?: StudentSuspension[];
     version: number;
   } | null> {
     try {
@@ -459,6 +505,7 @@ export const storageService = {
           summaries: validSummaries,
           onlineStudentIds: Array.isArray(data.onlineStudentIds) ? data.onlineStudentIds : [],
           onlineSessions: Array.isArray(data.onlineSessions) ? data.onlineSessions : [],
+          suspensions: Array.isArray(data.suspensions) ? data.suspensions : [],
           version: data.version || 0,
         };
       }

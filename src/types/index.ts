@@ -31,6 +31,29 @@ export interface StudentDownloadInfo {
   teacherName: string;
 }
 
+export interface StudentActivityLog {
+  id: string;
+  studentId: string;
+  studentName: string;
+  action: string;
+  section: string;
+  subject?: string;
+  timestamp: number;
+  timeFormatted: string;
+  deviceType?: string;
+  type?: 'enter' | 'navigate' | 'view_summary' | 'download_file' | 'game' | 'exit' | 'kicked';
+}
+
+export interface StudentSuspension {
+  studentId: string;
+  studentName: string;
+  kickedAt: number;
+  durationMinutes: number; // 0 = permanent until manager unlocks
+  expiresAt: number; // 0 = permanent until manager unlocks
+  reason?: string;
+  kickedBy?: string;
+}
+
 export interface StudentLiveSession {
   studentId: string;
   studentName: string;
@@ -41,6 +64,12 @@ export interface StudentLiveSession {
   deviceType?: string;
   lastSeen: number;
   cameraCode?: string;
+  isSuspended?: boolean;
+  suspensionExpiresAt?: number;
+  suspensionReason?: string;
+  snapshotTheme?: 'home' | 'portal' | 'summary' | 'game' | 'login' | 'download';
+  activityCount?: number;
+  recentActivities?: StudentActivityLog[];
 }
 
 export interface SchoolConfig {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, FileText, CheckCircle, ShieldCheck, User, School, GraduationCap, X } from 'lucide-react';
+import { Download, FileText, CheckCircle, ShieldCheck, User, School, GraduationCap, X, Image as ImageIcon } from 'lucide-react';
 import { SchoolConfig, StudentDownloadInfo, SummaryItem } from '../types';
 
 interface StudentDownloadModalProps {
@@ -8,7 +8,7 @@ interface StudentDownloadModalProps {
   summary: SummaryItem;
   config: SchoolConfig;
   defaultStudentName?: string;
-  onConfirmDownload: (info: StudentDownloadInfo) => void;
+  onConfirmDownload: (info: StudentDownloadInfo, format: 'image' | 'document' | 'text') => void;
 }
 
 export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
@@ -23,6 +23,17 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
   const [schoolName, setSchoolName] = useState(config.schoolName || 'مدرسة عبد الملك بن مروان');
   const [teacherName, setTeacherName] = useState(config.defaultTeacherName || config.authorName || 'صهيب القحطاني');
   const [error, setError] = useState('');
+
+  const hasImageAttachment =
+    summary.attachmentType === 'image' ||
+    Boolean(summary.attachmentName?.match(/\.(png|jpe?g|webp|gif|svg)$/i)) ||
+    Boolean(summary.attachmentUrl?.startsWith('data:image/')) ||
+    Boolean(summary.attachmentData?.startsWith('data:image/')) ||
+    Boolean(summary.attachmentUrl?.includes('/uploads/'));
+
+  const [downloadFormat, setDownloadFormat] = useState<'image' | 'document' | 'text'>(
+    hasImageAttachment ? 'image' : 'document'
+  );
 
   if (!isOpen) return null;
 
@@ -49,17 +60,20 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
     }
 
     setError('');
-    onConfirmDownload({
-      studentName: studentName.trim(),
-      schoolName: schoolName.trim(),
-      teacherName: teacherName.trim(),
-    });
+    onConfirmDownload(
+      {
+        studentName: studentName.trim(),
+        schoolName: schoolName.trim(),
+        teacherName: teacherName.trim(),
+      },
+      downloadFormat
+    );
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" dir="rtl">
-      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden border border-emerald-100 flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden border border-emerald-100 flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="bg-gradient-to-r from-emerald-800 to-teal-700 text-white p-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -81,11 +95,11 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
           {/* File Card Info */}
           <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5" />
+              {hasImageAttachment ? <ImageIcon className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs text-emerald-700 font-medium">الملف المراد تنزيله:</div>
@@ -97,6 +111,44 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Download Format Choice if image attachment exists */}
+          {hasImageAttachment && (
+            <div className="bg-amber-50/80 border border-amber-300 rounded-xl p-3 space-y-2">
+              <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                <span>اختر صيغة التنزيل المعتمدة:</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDownloadFormat('image')}
+                  className={`p-2.5 rounded-lg border text-xs font-bold flex flex-col items-center justify-center text-center gap-1 transition ${
+                    downloadFormat === 'image'
+                      ? 'bg-emerald-700 text-white border-emerald-800 shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  <span>صورة ورقة العمل (PNG)</span>
+                  <span className="text-[10px] opacity-90 font-normal">تفتح بالاستوديو مباشرة</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDownloadFormat('document')}
+                  className={`p-2.5 rounded-lg border text-xs font-bold flex flex-col items-center justify-center text-center gap-1 transition ${
+                    downloadFormat === 'document'
+                      ? 'bg-emerald-700 text-white border-emerald-800 shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>مستند دراسي كامل</span>
+                  <span className="text-[10px] opacity-90 font-normal">شامل الصورة والنص والختم</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Stamp Placement Notice */}
           <div className="flex items-center justify-between text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600">
@@ -113,9 +165,9 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
           )}
 
           {/* Inputs */}
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+              <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1.5">
                 <User className="w-4 h-4 text-emerald-600" />
                 <span>اسم الطالب الرباعي أو الثلاثي *</span>
               </label>
@@ -135,7 +187,7 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+              <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1.5">
                 <School className="w-4 h-4 text-emerald-600" />
                 <span>اسم المدرسة *</span>
               </label>
@@ -150,7 +202,7 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+              <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1.5">
                 <GraduationCap className="w-4 h-4 text-emerald-600" />
                 <span>اسم المعلم / المشرف *</span>
               </label>
@@ -166,7 +218,7 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
           </div>
 
           {/* Stamp Preview Card */}
-          <div className="p-3.5 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-300 rounded-xl text-center">
+          <div className="p-3 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-300 rounded-xl text-center">
             <div className="text-[11px] font-bold text-emerald-800 mb-1">معاينة بطاقة الاعتماد التي ستطبع داخل الملف:</div>
             <div className="inline-block bg-white border-2 border-emerald-500 rounded-lg px-4 py-2 text-xs shadow-sm">
               <div className="font-bold text-emerald-800">{schoolName || 'اسم المدرسة'}</div>
@@ -183,10 +235,14 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
           <div className="pt-2 flex items-center gap-3">
             <button
               type="submit"
-              className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
             >
               <Download className="w-4 h-4" />
-              <span>تأكيد وتنزيل الملف المعتمد</span>
+              <span>
+                {downloadFormat === 'image'
+                  ? 'تأكيد وتحميل ورقة العمل (صورة معتمدة)'
+                  : 'تأكيد وتنزيل المستند المعتمد'}
+              </span>
             </button>
             <button
               type="button"

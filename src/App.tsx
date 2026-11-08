@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SchoolConfig, Student, SummaryItem, CurrentUser, StudentLiveSession } from './types';
+import { SchoolConfig, Student, SummaryItem, CurrentUser, StudentLiveSession, StudentSuspension } from './types';
 import { storageService, DEFAULT_CONFIG } from './services/storageService';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -25,7 +25,10 @@ import {
   Gamepad2,
   Siren,
   ExternalLink,
-  Compass
+  Compass,
+  Ban,
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function App() {
@@ -36,6 +39,7 @@ export default function App() {
   const [favorites, setFavorites] = useState<string[]>(() => storageService.getFavorites());
   const [onlineStudentIds, setOnlineStudentIds] = useState<string[]>([]);
   const [onlineSessions, setOnlineSessions] = useState<StudentLiveSession[]>([]);
+  const [suspensions, setSuspensions] = useState<StudentSuspension[]>([]);
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [navigatingBtnId, setNavigatingBtnId] = useState<string | null>(null);
@@ -48,6 +52,37 @@ export default function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [selectedSummary, setSelectedSummary] = useState<SummaryItem | null>(null);
+
+  // Check if current user is suspended / kicked by manager
+  const currentSuspension = suspensions.find(
+    (s) =>
+      (currentUser.student && s.studentId === currentUser.student.id) ||
+      (currentUser.student && s.studentName.toLowerCase() === currentUser.student.fullName?.toLowerCase())
+  );
+  const isStudentSuspended = Boolean(
+    currentUser.role === 'student' &&
+      currentSuspension &&
+      (currentSuspension.expiresAt === 0 || Date.now() < currentSuspension.expiresAt)
+  );
+
+  const [remainingSuspensionSeconds, setRemainingSuspensionSeconds] = useState<number>(0);
+
+  useEffect(() => {
+    if (!currentSuspension || currentSuspension.expiresAt === 0) return;
+    const updateCountdown = () => {
+      const diff = Math.max(0, Math.floor((currentSuspension.expiresAt - Date.now()) / 1000));
+      setRemainingSuspensionSeconds(diff);
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [currentSuspension]);
+
+  const formatSuspensionCountdown = (sec: number) => {
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   // Tactile animated navigation handler
   const handleNavigateWithAnimation = (id: string, action: () => void) => {
@@ -106,6 +141,10 @@ export default function App() {
         if (Array.isArray(serverState.onlineSessions)) {
           setOnlineSessions(serverState.onlineSessions);
         }
+
+        if (Array.isArray(serverState.suspensions)) {
+          setSuspensions(serverState.suspensions);
+        }
       }
     };
 
@@ -159,13 +198,20 @@ export default function App() {
         : /iPhone|iPad/i.test(navigator.userAgent)
         ? 'جوال آيفون (iOS)'
         : 'كمبيوتر / لابتوب',
+      snapshotTheme: activeTab === 'games'
+        ? 'game' as const
+        : selectedSummary
+        ? 'summary' as const
+        : activeTab === 'second-intermediate'
+        ? 'portal' as const
+        : 'home' as const,
     });
 
     storageService.sendHeartbeat(studentId, getTelemetry());
 
     const heartbeatInterval = setInterval(() => {
       storageService.sendHeartbeat(studentId, getTelemetry());
-    }, 5000);
+    }, 4000);
 
     const handleUnload = () => {
       storageService.sendOffline(studentId);
@@ -923,6 +969,7 @@ export default function App() {
               onRefreshSummaries={handleRefreshSummaries}
               onlineStudentIds={onlineStudentIds}
               onlineSessions={onlineSessions}
+              suspensions={suspensions}
             />
           ) : (
             <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center max-w-lg mx-auto space-y-4 shadow-sm">
@@ -987,6 +1034,59 @@ export default function App() {
         isFilePreviewEnabled={config.isFilePreviewEnabled !== false}
         config={config}
       />
+
+      {/* Student Suspended / Kicked by Manager Lockout Overlay */}
+      {isStudentSuspended && currentSuspension && (
+        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 text-center select-none animate-fade-in" dir="rtl">
+          <div className="bg-slate-900 border-2 border-rose-600 rounded-3xl max-w-md w-full p-6 sm:p-8 text-white shadow-2xl space-y-5">
+            <div className="w-16 h-16 rounded-2xl bg-rose-950 border border-rose-500/80 flex items-center justify-center text-rose-400 mx-auto shadow-lg animate-pulse">
+              <Ban className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-300 bg-rose-950/80 border border-rose-800 px-3 py-1 rounded-full">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>إشعار إداري عاجل</span>
+              </div>
+              <h2 className="text-xl font-black text-white">
+                تم إيقاف دخولك إلى المنصة مؤقتاً
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                عزيزي الطالب <strong className="text-emerald-400 font-bold">{currentUser.student?.fullName}</strong>، تم تعليق صلاحية دخولك للصفحة بأمر من مدير المدرسة لمتابعة النشاط الدراسي.
+              </p>
+            </div>
+
+            <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 text-xs space-y-1.5 text-right">
+              <div className="flex justify-between text-slate-400">
+                <span>المدرسة:</span>
+                <span className="font-bold text-white">{config.schoolName}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>سبب الإجراء:</span>
+                <span className="font-bold text-rose-300">{currentSuspension.reason || 'بأمر من إدارة المدرسة'}</span>
+              </div>
+            </div>
+
+            {/* Live Countdown Timer if duration set */}
+            {currentSuspension.expiresAt > 0 ? (
+              <div className="p-4 bg-rose-950/50 border border-rose-700/60 rounded-2xl">
+                <div className="text-[11px] text-rose-200 font-semibold mb-1">الوقت المتبقي لفك التعليق والعودة للمنصة تلقائياً:</div>
+                <div className="text-3xl font-mono font-black text-amber-400 tracking-wider">
+                  {formatSuspensionCountdown(remainingSuspensionSeconds)}
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-amber-300 font-bold">
+                🔒 حالة الحساب: معلق حتى يقوم مدير المدرسة بفك الحظر وإعادة فتح الموقع لك.
+              </div>
+            )}
+
+            <p className="text-[11px] text-slate-500">
+              فور انتهاء الوقت أو قيام المدير بفك الحظر، ستفتح لك الصفحة تلقائياً دون الحاجة لإعادة الدخول.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

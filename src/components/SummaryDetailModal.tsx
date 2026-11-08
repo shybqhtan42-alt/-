@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SummaryItem, CurrentUser, SchoolConfig, StudentDownloadInfo } from '../types';
-import { downloadSummaryDocument, downloadSummaryText } from '../utils/fileExport';
+import { downloadSummaryDocument, downloadSummaryText, downloadStampedImage } from '../utils/fileExport';
 import { StudentDownloadModal } from './StudentDownloadModal';
 import { 
   X, 
@@ -128,8 +128,10 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
     (config?.requireStudentInfoOnDownload ?? true) &&
     (summary?.requiresStudentInfo ?? true);
 
-  const executeDownloadWithInfo = (info?: StudentDownloadInfo) => {
-    if (pendingDownloadType === 'text') {
+  const executeDownloadWithInfo = (info?: StudentDownloadInfo, format?: 'image' | 'document' | 'text') => {
+    if (format === 'image' || (isImageAttachment && hasAttachment && format !== 'document' && format !== 'text')) {
+      downloadStampedImage(summary, config, info);
+    } else if (pendingDownloadType === 'text' || format === 'text') {
       downloadSummaryText(summary, config, info);
     } else {
       downloadSummaryDocument(summary, config, info);
@@ -137,7 +139,7 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
   };
 
   const handleDownloadFile = () => {
-    setPendingDownloadType('document');
+    setPendingDownloadType(isImageAttachment ? 'document' : 'document');
     if (requiresStudentVerification) {
       setIsDownloadModalOpen(true);
     } else {
@@ -150,7 +152,7 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
     if (requiresStudentVerification) {
       setIsDownloadModalOpen(true);
     } else {
-      executeDownloadWithInfo();
+      executeDownloadWithInfo(undefined, 'text');
     }
   };
 
@@ -610,8 +612,8 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
           summary={summary}
           config={config}
           defaultStudentName={currentUser.role === 'student' ? currentUser.student?.fullName || '' : ''}
-          onConfirmDownload={(info) => {
-            executeDownloadWithInfo(info);
+          onConfirmDownload={(info, format) => {
+            executeDownloadWithInfo(info, format);
           }}
         />
       )}

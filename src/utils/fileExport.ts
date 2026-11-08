@@ -14,8 +14,6 @@ function triggerDownload(blob: Blob, filename: string) {
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
-  // CRITICAL: Do NOT set target="_blank" when downloading on mobile Chrome,
-  // as it causes mobile Chrome to navigate to a blank window and reload the app!
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -23,15 +21,181 @@ function triggerDownload(blob: Blob, filename: string) {
 }
 
 /**
+ * Converts any image URL (including relative /uploads/ or remote URLs) to base64
+ * so it is guaranteed to embed self-contained into HTML documents or canvas without network dependencies.
+ */
+async function resolveImageAsBase64(src?: string): Promise<string | null> {
+  if (!src) return null;
+  if (src.startsWith('data:image/')) return src;
+
+  try {
+    const res = await fetch(src);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        resolve(typeof reader.result === 'string' ? reader.result : null);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.warn('Could not convert image to base64:', err);
+    return null;
+  }
+}
+
+/**
+ * Downloads the worksheet image stamped directly with the student's name, school name,
+ * and teacher name rendered onto the image canvas as a genuine high-resolution PNG file.
+ */
+export async function downloadStampedImage(
+  summary: SummaryItem,
+  config?: Partial<SchoolConfig>,
+  studentInfo?: StudentDownloadInfo
+): Promise<void> {
+  const schoolName = studentInfo?.schoolName || config?.schoolName || 'مدرسة عبد الملك بن مروان';
+  const platformTitle = config?.platformTitle || 'منصة البشير التعليمية';
+  const teacherName = studentInfo?.teacherName || config?.defaultTeacherName || config?.authorName || 'أ. صهيب القحطاني';
+  const rawImage = summary.attachmentData || summary.attachmentUrl;
+
+  const base64Src = await resolveImageAsBase64(rawImage);
+  if (!base64Src) {
+    // Fallback to document generator
+    return downloadSummaryDocument(summary, config, studentInfo);
+  }
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error('Failed to load image into canvas'));
+    img.src = base64Src;
+  });
+
+  const imgWidth = img.naturalWidth || img.width || 1200;
+  const imgHeight = img.naturalHeight || img.height || 800;
+
+  // Set canvas dimensions to fit original image + official stamp header
+  const canvasWidth = Math.max(imgWidth, 1200);
+  const scale = canvasWidth / imgWidth;
+  const scaledImgHeight = imgHeight * scale;
+
+  const headerHeight = studentInfo ? 260 : 130;
+  const footerHeight = 65;
+  const totalHeight = headerHeight + scaledImgHeight + footerHeight;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = canvasWidth;
+  canvas.height = totalHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return downloadSummaryDocument(summary, config, studentInfo);
+  }
+
+  // 1. White Background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvasWidth, totalHeight);
+
+  // 2. Official Header Banner
+  const grad = ctx.createLinearGradient(0, 0, canvasWidth, 0);
+  grad.addColorStop(0, '#064e3b');
+  grad.addColorStop(0.5, '#065f46');
+  grad.addColorStop(1, '#047857');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvasWidth, headerHeight);
+
+  // Gold accent line
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(0, headerHeight - 6, canvasWidth, 6);
+
+  ctx.textAlign = 'right';
+  ctx.direction = 'rtl';
+
+  // School name and title
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 30px "Cairo", Tahoma, sans-serif';
+  ctx.fillText(`${schoolName} • ${platformTitle}`, canvasWidth - 40, 48);
+
+  ctx.fillStyle = '#a7f3d0';
+  ctx.font = 'bold 22px "Cairo", Tahoma, sans-serif';
+  ctx.fillText(`ورقة عمل وملخص دراسي معتمد: ${summary.title} • ${summary.grade} - ${summary.subject}`, canvasWidth - 40, 88);
+
+  // Student credentials stamp box
+  if (studentInfo) {
+    const boxY = 110;
+    const boxWidth = canvasWidth - 80;
+    const boxHeight = 135;
+
+    ctx.fillStyle = '#fef3c7';
+    ctx.fillRect(40, boxY, boxWidth, boxHeight);
+
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#f59e0b';
+    ctx.strokeRect(40, boxY, boxWidth, boxHeight);
+
+    // Title badge
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(canvasWidth - 260, boxY + 10, 200, 28);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 16px "Cairo", Tahoma, sans-serif';
+    ctx.fillText('بيانات توثيق الطالب والملف ✓', canvasWidth - 75, boxY + 30);
+
+    ctx.fillStyle = '#78350f';
+    ctx.font = 'bold 20px "Cairo", Tahoma, sans-serif';
+    ctx.fillText(`اسم الطالب: ${studentInfo.studentName}`, canvasWidth - 70, boxY + 75);
+    ctx.fillText(`المدرسة: ${studentInfo.schoolName}`, canvasWidth - 70, boxY + 110);
+
+    ctx.fillText(`المعلم المشرف: ${studentInfo.teacherName}`, canvasWidth / 2 - 20, boxY + 75);
+    ctx.fillText(`الصف: ${summary.grade} • المادة: ${summary.subject}`, canvasWidth / 2 - 20, boxY + 110);
+
+    ctx.font = '14px "Cairo", Tahoma, sans-serif';
+    ctx.fillStyle = '#92400e';
+    ctx.fillText(`تاريخ التوثيق: ${new Date().toLocaleDateString('ar-SA')} م`, 70, boxY + 95);
+  }
+
+  // 3. Draw original worksheet image!
+  ctx.drawImage(img, 0, headerHeight, canvasWidth, scaledImgHeight);
+
+  // 4. Footer Bar
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(0, totalHeight - footerHeight, canvasWidth, footerHeight);
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillRect(0, totalHeight - footerHeight, canvasWidth, 1);
+
+  ctx.fillStyle = '#475569';
+  ctx.font = 'bold 16px "Cairo", Tahoma, sans-serif';
+  ctx.fillText(
+    `وثيقة دراسية رسمية معتمدة للطالب: ${studentInfo?.studentName || ''} • حقوق الطبع والتوثيق محفوظة لمدرسة ${schoolName}`,
+    canvasWidth - 40,
+    totalHeight - 24
+  );
+
+  // Trigger real image download
+  canvas.toBlob((blob) => {
+    if (blob) {
+      const safeTitle = (summary.title || 'ورقة_عمل').replace(/[/\\?%*:|"<>]/g, '_').trim();
+      const safeStudent = studentInfo?.studentName
+        ? ` - الطالب ${studentInfo.studentName.replace(/[/\\?%*:|"<>]/g, '_')}`
+        : '';
+      triggerDownload(blob, `${safeTitle}${safeStudent}.png`);
+    } else {
+      downloadSummaryDocument(summary, config, studentInfo);
+    }
+  }, 'image/png');
+}
+
+/**
  * Downloads the summary as a complete, self-contained educational document or native attachment.
- * If studentInfo is provided, stamps student name, school name, and teacher name in the place
- * determined by the manager (header, footer, watermark, or both).
+ * Guarantees that any attached image is embedded as inline base64 so it NEVER breaks when opened offline.
  */
 export async function downloadSummaryDocument(
   summary: SummaryItem,
   config?: Partial<SchoolConfig>,
   studentInfo?: StudentDownloadInfo
-) {
+): Promise<void> {
   const schoolName = studentInfo?.schoolName || config?.schoolName || 'مدرسة عبد الملك بن مروان';
   const authorName = config?.authorName || 'صهيب القحطاني';
   const teacherName = studentInfo?.teacherName || config?.defaultTeacherName || authorName || 'أ. صهيب القحطاني';
@@ -47,58 +211,33 @@ export async function downloadSummaryDocument(
     Boolean(summary.attachmentUrl?.startsWith('data:image/')) ||
     Boolean(summary.attachmentData?.startsWith('data:image/'));
 
-  const defaultExt = isImage ? '.png' : '.pdf';
-  const safeFilename = (
-    summary.attachmentName ||
-    `${safeTitle}${defaultExt}`
-  ).replace(/[/\\?%*:|"<>]/g, '_');
+  const rawImageSrc = summary.attachmentData || summary.attachmentUrl;
+  const resolvedBase64Image = isImage ? await resolveImageAsBase64(rawImageSrc) : null;
 
-  const dataSource = (summary.attachmentData && summary.attachmentData.startsWith('data:'))
-    ? summary.attachmentData
-    : (summary.attachmentUrl && summary.attachmentUrl.startsWith('data:'))
-    ? summary.attachmentUrl
-    : null;
+  // If this summary is exclusively a standalone image and student downloaded it directly:
+  // Use downloadStampedImage for pristine image file output!
+  if (isImage && resolvedBase64Image && (!summary.summaryText || summary.summaryText.length < 50)) {
+    return downloadStampedImage(summary, config, studentInfo);
+  }
 
-  // If no student personalization is requested AND there is a direct binary attachment, download directly
-  if (!studentInfo) {
-    // 1. Base64 binary
-    if (dataSource) {
-      try {
-        const parts = dataSource.split(',');
-        const mime = parts[0].match(/:(.*?);/)?.[1] || (isImage ? 'image/png' : 'application/pdf');
-        const byteString = atob(parts[1]);
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++) {
-          ia[i] = byteString.charCodeAt(i);
-        }
-        const blob = new Blob([ab], { type: mime });
-        triggerDownload(blob, safeFilename);
-        return;
-      } catch (e) {
-        console.warn('Failed base64 data download fallback:', e);
-      }
-    }
-
-    // 2. Server URL
-    if (summary.attachmentUrl && (summary.attachmentUrl.startsWith('/') || summary.attachmentUrl.startsWith('http'))) {
-      try {
-        const res = await fetch(summary.attachmentUrl);
-        if (res.ok) {
-          const contentType = res.headers.get('content-type') || '';
-          if (!contentType.includes('text/html') || safeFilename.endsWith('.html')) {
-            const blob = await res.blob();
-            triggerDownload(blob, safeFilename);
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('Direct fetch failed, falling back to document generator:', err);
-      }
+  // If it's a PDF file with no student personalization or direct PDF download requested:
+  if (summary.attachmentType === 'pdf' || summary.attachmentName?.toLowerCase().endsWith('.pdf')) {
+    if (summary.attachmentData && summary.attachmentData.startsWith('data:application/pdf')) {
+      const parts = summary.attachmentData.split(',');
+      const byteString = atob(parts[1]);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+      const blob = new Blob([ab], { type: 'application/pdf' });
+      const safePdfName = studentInfo?.studentName
+        ? `${safeTitle} - الطالب ${studentInfo.studentName.replace(/[/\\?%*:|"<>]/g, '_')}.pdf`
+        : `${safeTitle}.pdf`;
+      triggerDownload(blob, safePdfName);
+      return;
     }
   }
 
-  // Generate a personalized, self-contained educational document!
+  // Generate a self-contained, offline-compatible HTML document with guaranteed embedded base64!
   const filename = studentInfo?.studentName
     ? `${safeTitle} - الطالب ${studentInfo.studentName.replace(/[/\\?%*:|"<>]/g, '_')}.html`
     : `${safeTitle} - ${summary.subject} - ${summary.grade || 'المقرر'}.html`;
@@ -125,11 +264,11 @@ export async function downloadSummaryDocument(
       line-height: 1.8;
     }
     .sheet {
-      max-width: 840px;
+      max-width: 860px;
       margin: 0 auto;
       background: #ffffff;
       border-radius: 20px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
       border: 1px solid #cbd5e1;
       overflow: hidden;
       position: relative;
@@ -232,6 +371,35 @@ export async function downloadSummaryDocument(
       padding: 28px 24px;
       position: relative;
     }
+    /* Prominent Worksheet File Image Box */
+    .worksheet-highlight-box {
+      margin-bottom: 24px;
+      background: #f8fafc;
+      border: 2px solid #065f46;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 4px 12px rgba(6, 95, 70, 0.08);
+      text-align: center;
+    }
+    .worksheet-badge-tag {
+      font-size: 13px;
+      font-weight: 900;
+      color: #065f46;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .worksheet-img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      border: 1px solid #cbd5e1;
+      display: block;
+      margin: 0 auto;
+    }
     .section-label {
       font-size: 13px;
       font-weight: 800;
@@ -254,29 +422,13 @@ export async function downloadSummaryDocument(
       position: relative;
       z-index: 1;
     }
-    .attachment-preview-box {
-      margin-top: 20px;
-      padding: 16px;
-      background: #f8fafc;
-      border: 2px dashed #cbd5e1;
-      border-radius: 14px;
-      text-align: center;
-      position: relative;
-      z-index: 1;
-    }
-    .attachment-preview-box img {
-      max-width: 100%;
-      height: auto;
-      border-radius: 10px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-    }
     /* Official Student & Teacher Endorsement Stamp (Footer) */
     .student-stamp-footer {
       background: #ecfdf5;
       border: 2px solid #10b981;
       border-radius: 12px;
       padding: 12px 18px;
-      margin-bottom: 16px;
+      margin-top: 24px;
       display: flex;
       align-items: center;
       gap: 12px;
@@ -399,19 +551,25 @@ export async function downloadSummaryDocument(
       </div>
       ` : ''}
 
+      ${resolvedBase64Image ? `
+      <!-- PROMINENT WORKSHEET FILE ATTACHMENT (100% Guaranteed Base64) -->
+      <div class="worksheet-highlight-box">
+        <div class="worksheet-badge-tag">
+          <span>📄</span>
+          <span>ورقة العمل والملف المرفق المعتمد:</span>
+        </div>
+        <img src="${resolvedBase64Image}" alt="${escapeHtml(summary.title)}" class="worksheet-img" />
+      </div>
+      ` : ''}
+
+      ${summary.summaryText && summary.summaryText.trim() ? `
       <div class="section-label">محتوى الملخص والشرح الدراسي:</div>
       <div class="summary-text-box">${escapeHtml(summary.summaryText)}</div>
-
-      ${(dataSource || summary.attachmentUrl) && isImage ? `
-      <div class="attachment-preview-box">
-        <div style="font-size: 12px; font-weight: 800; color: #475569; margin-bottom: 8px;">مرفق الملف التعليمي المعتمد:</div>
-        <img src="${escapeHtml(dataSource || summary.attachmentUrl || '')}" alt="${escapeHtml(summary.title)}" />
-      </div>
       ` : ''}
 
       ${showFooterStamp && studentInfo ? `
       <!-- Official Footer Stamp Box as specified by manager -->
-      <div class="student-stamp-footer" style="margin-top: 24px;">
+      <div class="student-stamp-footer">
         <div class="stamp-seal-circle">✓</div>
         <div>
           <div>تم توثيق واعتماد هذا المستند رسميًا للطالب: <strong style="color: #064e3b; font-size: 14px;">${escapeHtml(studentInfo.studentName)}</strong></div>
@@ -472,7 +630,7 @@ ${platformTitle} - ${schoolName}
 ===============================================================
 نص ومحتوى الملخص الدراسي:
 ---------------------------------------------------------------
-${summary.summaryText}
+${summary.summaryText || 'ورقة عمل ومرفق دراسي معتمد'}
 ===============================================================
 حقوق الطبع والتوثيق محفوظة لمدرسة ${schoolName}
 `;

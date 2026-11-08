@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Student, SummaryItem, SchoolConfig, AVAILABLE_GRADES, StudentLiveSession } from '../types';
+import { Student, SummaryItem, SchoolConfig, AVAILABLE_GRADES, StudentLiveSession, StudentSuspension } from '../types';
 import { storageService } from '../services/storageService';
 import { CCTVMonitorRoom } from './CCTVMonitorRoom';
 import { 
@@ -51,6 +51,7 @@ interface ManagerDashboardProps {
   onRefreshSummaries: () => void;
   onlineStudentIds?: string[];
   onlineSessions?: StudentLiveSession[];
+  suspensions?: StudentSuspension[];
 }
 
 export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
@@ -62,6 +63,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   onRefreshSummaries,
   onlineStudentIds = [],
   onlineSessions = [],
+  suspensions = [],
 }) => {
   const [activeTab, setActiveTab] = useState<'students' | 'summaries' | 'images' | 'settings' | 'backup' | 'cctv'>('students');
 
@@ -3137,6 +3139,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         <CCTVMonitorRoom
           students={students}
           onlineSessions={onlineSessions || []}
+          suspensions={suspensions}
           config={config}
           onRefresh={onRefreshStudents}
         />

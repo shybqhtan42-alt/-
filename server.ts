@@ -470,13 +470,44 @@ async function startServer() {
     deviceType?: string;
     lastSeen: number;
     cameraCode?: string;
+    isSuspended?: boolean;
+    suspensionExpiresAt?: number;
+    suspensionReason?: string;
+    snapshotTheme?: 'home' | 'portal' | 'summary' | 'game' | 'login' | 'download';
+    activityCount?: number;
+    recentActivities?: StudentActivityLog[];
+  }
+
+  interface StudentSuspension {
+    studentId: string;
+    studentName: string;
+    kickedAt: number;
+    durationMinutes: number; // 0 = permanent until manager unlocks
+    expiresAt: number; // 0 = permanent until manager unlocks
+    reason?: string;
+    kickedBy: string;
+  }
+
+  interface StudentActivityLog {
+    id: string;
+    studentId: string;
+    studentName: string;
+    action: string;
+    section: string;
+    subject?: string;
+    timestamp: number;
+    timeFormatted: string;
+    deviceType?: string;
+    type?: 'enter' | 'navigate' | 'view_summary' | 'download_file' | 'game' | 'exit' | 'kicked';
   }
 
   const liveSessionsMap = new Map<string, LiveStudentSession>();
+  const studentSuspensionsMap = new Map<string, StudentSuspension>();
+  const studentActivityLogs: StudentActivityLog[] = [];
 
   // Heartbeat endpoint for active students with live CCTV telemetry
   app.post('/api/presence/heartbeat', (req, res) => {
-    const { studentId, studentName, grade, currentSection, currentSubject, currentAction, deviceType } = req.body || {};
+    const { studentId, studentName, grade, currentSection, currentSubject, currentAction, deviceType, snapshotTheme } = req.body || {};
     if (studentId && typeof studentId === 'string') {
       const existing = liveSessionsMap.get(studentId);
       let cameraCode = existing?.cameraCode;
@@ -484,6 +515,59 @@ async function startServer() {
         const count = liveSessionsMap.size + 1;
         cameraCode = `CAM-${count < 10 ? '0' + count : count}`;
       }
+
+      // Check suspension expiration
+      const suspension = studentSuspensionsMap.get(studentId);
+      let isSuspended = false;
+      let suspensionExpiresAt = 0;
+      let suspensionReason = '';
+      if (suspension) {
+        if (suspension.expiresAt > 0 && Date.now() > suspension.expiresAt) {
+          studentSuspensionsMap.delete(studentId);
+        } else {
+          isSuspended = true;
+          suspensionExpiresAt = suspension.expiresAt;
+          suspensionReason = suspension.reason || 'بأمر من إدارة المدرسة';
+        }
+      }
+
+      // Log activity if action or section changed
+      if (currentAction && existing && existing.currentAction !== currentAction) {
+        const logItem: StudentActivityLog = {
+          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          studentId,
+          studentName: studentName || existing.studentName,
+          action: currentAction,
+          section: currentSection || existing.currentSection || 'الصفحة الرئيسية',
+          subject: currentSubject || existing.currentSubject,
+          timestamp: Date.now(),
+          timeFormatted: new Date().toLocaleTimeString('ar-SA'),
+          deviceType: deviceType || existing.deviceType,
+          type: currentAction.includes('تنزيل') ? 'download_file' : currentAction.includes('ملخص') ? 'view_summary' : 'navigate',
+        };
+        studentActivityLogs.push(logItem);
+        if (studentActivityLogs.length > 300) studentActivityLogs.shift();
+      } else if (!existing) {
+        // Initial entry log
+        studentActivityLogs.push({
+          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          studentId,
+          studentName: studentName || 'طالب جديد',
+          action: 'دخل إلى المنصة المدرسية',
+          section: currentSection || 'الصفحة الرئيسية',
+          subject: currentSubject,
+          timestamp: Date.now(),
+          timeFormatted: new Date().toLocaleTimeString('ar-SA'),
+          deviceType,
+          type: 'enter',
+        });
+      }
+
+      const recentStudentLogs = studentActivityLogs
+        .filter(l => l.studentId === studentId)
+        .slice(-8)
+        .reverse();
+
       liveSessionsMap.set(studentId, {
         studentId,
         studentName: studentName || existing?.studentName || 'طالب متصل',
@@ -494,15 +578,121 @@ async function startServer() {
         deviceType: deviceType || existing?.deviceType || 'جوال (Android/iOS)',
         lastSeen: Date.now(),
         cameraCode,
+        isSuspended,
+        suspensionExpiresAt,
+        suspensionReason,
+        snapshotTheme: snapshotTheme || 'home',
+        activityCount: recentStudentLogs.length,
+        recentActivities: recentStudentLogs,
+      });
+
+      return res.json({
+        success: true,
+        timestamp: Date.now(),
+        isSuspended,
+        suspension: isSuspended ? suspension : null,
       });
     }
     res.json({ success: true, timestamp: Date.now() });
+  });
+
+  // Kick / Suspend student endpoint
+  app.post('/api/presence/kick', (req, res) => {
+    const { studentId, studentName, durationMinutes = 5, reason = 'بأمر من إدارة المدرسة لمتابعة النشاط' } = req.body || {};
+    if (!studentId) return res.status(400).json({ error: 'Missing studentId' });
+
+    const duration = Number(durationMinutes) || 0;
+    const kickedAt = Date.now();
+    const expiresAt = duration > 0 ? kickedAt + duration * 60 * 1000 : 0;
+
+    const suspension: StudentSuspension = {
+      studentId,
+      studentName: studentName || 'طالب مسجل',
+      kickedAt,
+      durationMinutes: duration,
+      expiresAt,
+      reason,
+      kickedBy: 'إدارة المدرسة',
+    };
+
+    studentSuspensionsMap.set(studentId, suspension);
+
+    // Update active session if present
+    const existing = liveSessionsMap.get(studentId);
+    if (existing) {
+      existing.isSuspended = true;
+      existing.suspensionExpiresAt = expiresAt;
+      existing.suspensionReason = reason;
+    }
+
+    // Log kick activity
+    studentActivityLogs.push({
+      id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      studentId,
+      studentName: suspension.studentName,
+      action: `قام المدير بإخراج الطالب مؤقتاً ${duration > 0 ? `لمدة (${duration} دقيقة)` : 'حتى يقوم المدير بفتح الموقع له يدوياً'}`,
+      section: 'إجراء أمني - إخراج الطالب',
+      timestamp: Date.now(),
+      timeFormatted: new Date().toLocaleTimeString('ar-SA'),
+      type: 'kicked',
+    });
+
+    res.json({ success: true, suspension });
+  });
+
+  // Unkick / Reopen platform for student
+  app.post('/api/presence/unkick', (req, res) => {
+    const { studentId } = req.body || {};
+    if (studentId) {
+      const prev = studentSuspensionsMap.get(studentId);
+      studentSuspensionsMap.delete(studentId);
+
+      const existing = liveSessionsMap.get(studentId);
+      if (existing) {
+        existing.isSuspended = false;
+        existing.suspensionExpiresAt = 0;
+      }
+
+      studentActivityLogs.push({
+        id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        studentId,
+        studentName: prev?.studentName || 'طالب مسجل',
+        action: 'قام المدير بفك الحظر وإعادة فتح الموقع للطالب فوراً',
+        section: 'إجراء أمني - فك الإيقاف',
+        timestamp: Date.now(),
+        timeFormatted: new Date().toLocaleTimeString('ar-SA'),
+        type: 'enter',
+      });
+    }
+    res.json({ success: true });
+  });
+
+  // Get student activity logs
+  app.get('/api/presence/logs', (req, res) => {
+    const { studentId } = req.query;
+    const logs = studentId && typeof studentId === 'string'
+      ? studentActivityLogs.filter(l => l.studentId === studentId)
+      : studentActivityLogs;
+    res.json({ logs: logs.slice(-150).reverse() });
   });
 
   // Explicit logout / offline endpoint
   app.post('/api/presence/offline', (req, res) => {
     const { studentId } = req.body || {};
     if (studentId && typeof studentId === 'string') {
+      const existing = liveSessionsMap.get(studentId);
+      if (existing) {
+        studentActivityLogs.push({
+          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          studentId,
+          studentName: existing.studentName,
+          action: 'خرج من المنصة المدرسية (تسجيل خروج / إغلاق)',
+          section: 'الصفحة الرئيسية',
+          timestamp: Date.now(),
+          timeFormatted: new Date().toLocaleTimeString('ar-SA'),
+          type: 'exit',
+        });
+      }
       liveSessionsMap.delete(studentId);
     }
     res.json({ success: true });
@@ -511,15 +701,22 @@ async function startServer() {
   // Dedicated CCTV live camera feeds endpoint
   app.get('/api/presence/cameras', (req, res) => {
     const now = Date.now();
-    const activeThreshold = 20000;
+    const activeThreshold = 25000;
     const activeFeeds: LiveStudentSession[] = [];
     liveSessionsMap.forEach((session, id) => {
+      // Check suspension expiry
+      const susp = studentSuspensionsMap.get(id);
+      if (susp && susp.expiresAt > 0 && now > susp.expiresAt) {
+        studentSuspensionsMap.delete(id);
+        session.isSuspended = false;
+      }
       if (now - session.lastSeen <= activeThreshold) {
         activeFeeds.push(session);
       }
     });
     res.json({
       cameras: activeFeeds,
+      suspensions: Array.from(studentSuspensionsMap.values()),
       totalActive: activeFeeds.length,
       timestamp: now,
     });
@@ -566,6 +763,7 @@ async function startServer() {
       deletedStudentIds: db.deletedStudentIds || [],
       onlineStudentIds,
       onlineSessions,
+      suspensions: Array.from(studentSuspensionsMap.values()),
       version: db.version,
       lastUpdated: db.lastUpdated,
       lastUpdatedTimestamp: db.lastUpdatedTimestamp,
