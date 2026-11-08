@@ -482,11 +482,38 @@ export const storageService = {
 
         this.safeSetItem(STORAGE_KEYS.STUDENTS, JSON.stringify(finalStudents));
 
-        if (Array.isArray(data.summaries)) {
-          const filtered = data.summaries.filter((s: any) => s && s.id && !activeDeletedIds.includes(s.id));
-          const dedupedSummaries = this.deduplicateSummaries(filtered);
-          this.safeSetItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(dedupedSummaries));
+        // Server state is authoritative, BUT merge any local valid summaries not yet reflected on the server
+        // so newly published summaries are NEVER wiped or lost!
+        let finalSummaries: SummaryItem[] = Array.isArray(data.summaries)
+          ? data.summaries.filter((s: any) => s && s.id && !activeDeletedIds.includes(s.id))
+          : [];
+
+        // Check for local summaries that are valid and not deleted
+        for (const localSum of localSummaries) {
+          if (localSum && localSum.id && !activeDeletedIds.includes(localSum.id)) {
+            const alreadyInFinal = finalSummaries.some(
+              (s) =>
+                s.id === localSum.id ||
+                ((s.title || '').trim() === (localSum.title || '').trim() &&
+                  s.subject === localSum.subject &&
+                  s.grade === localSum.grade &&
+                  s.category === localSum.category)
+            );
+            if (!alreadyInFinal) {
+              finalSummaries.unshift(localSum);
+              // Push to server so all phones see it immediately and permanently
+              fetch('/api/summaries', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(localSum),
+              }).catch(() => {});
+            }
+          }
         }
+
+        const dedupedSummaries = this.deduplicateSummaries(finalSummaries);
+        this.safeSetItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(dedupedSummaries));
+
         if (typeof data.version === 'number') {
           this.setLocalVersion(data.version);
         }
@@ -494,15 +521,10 @@ export const storageService = {
           this.setLocalTimestamp(data.lastUpdatedTimestamp);
         }
 
-        const rawSummaries = Array.isArray(data.summaries) ? data.summaries : localSummaries;
-        const validSummaries = this.deduplicateSummaries(
-          rawSummaries.filter((s: any) => s && s.id && !activeDeletedIds.includes(s.id))
-        );
-
         return {
           config: data.config || DEFAULT_CONFIG,
           students: finalStudents,
-          summaries: validSummaries,
+          summaries: dedupedSummaries,
           onlineStudentIds: Array.isArray(data.onlineStudentIds) ? data.onlineStudentIds : [],
           onlineSessions: Array.isArray(data.onlineSessions) ? data.onlineSessions : [],
           suspensions: Array.isArray(data.suspensions) ? data.suspensions : [],
@@ -728,6 +750,13 @@ export const storageService = {
       id: 'sum-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
       dateAdded: `${config.yearHijri} هـ / ${config.yearGregorian} م`,
     };
+
+    // Ensure this summary ID is not in deleted summary IDs
+    try {
+      const deletedList = this.getDeletedSummaryIds().filter((dId) => dId !== newSummary.id);
+      localStorage.setItem(STORAGE_KEYS.DELETED_SUMMARIES, JSON.stringify(deletedList));
+    } catch (_) {}
+
     summaries.unshift(newSummary);
     this.saveSummaries(summaries);
 
@@ -742,6 +771,14 @@ export const storageService = {
         const data = await res.json();
         if (data && typeof data.version === 'number') {
           this.setLocalVersion(data.version);
+        }
+        if (data && data.summary) {
+          const list = this.getSummaries();
+          const idx = list.findIndex((s) => s.id === newSummary.id);
+          if (idx !== -1) {
+            list[idx] = data.summary;
+            this.safeSetItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(list));
+          }
         }
       }
     } catch (err) {

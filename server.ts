@@ -1034,6 +1034,11 @@ async function startServer() {
 
     const id = summaryData.id || 'sum-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
 
+    // Ensure this summary ID is NOT marked as deleted in database
+    if (Array.isArray(db.deletedSummaryIds)) {
+      db.deletedSummaryIds = db.deletedSummaryIds.filter((dId) => dId !== id);
+    }
+
     // 1. Check if an item with this ID already exists
     const existingIndex = db.summaries.findIndex((s) => s.id === id);
     if (existingIndex !== -1) {

@@ -28,7 +28,11 @@ import {
   Gamepad2,
   Calendar,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Play,
+  Pause,
+  RotateCcw,
+  MousePointer
 } from 'lucide-react';
 import { Student, StudentLiveSession, StudentSuspension, StudentActivityLog, SchoolConfig } from '../types';
 import { storageService } from '../services/storageService';
