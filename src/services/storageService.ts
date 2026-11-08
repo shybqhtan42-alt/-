@@ -1,4 +1,4 @@
-import { Student, SummaryItem, SchoolConfig } from '../types';
+import { Student, SummaryItem, SchoolConfig, StudentLiveSession } from '../types';
 
 const STORAGE_KEYS = {
   STUDENTS: 'al_basheer_students_v1',
@@ -43,6 +43,10 @@ export const DEFAULT_CONFIG: SchoolConfig = {
   isLatestSpotlightEnabled: false,
   isHomeNavButtonsEnabled: true,
   defaultGrade: 'ثاني متوسط',
+  requireStudentInfoOnDownload: true,
+  downloadStampPlacement: 'header',
+  defaultTeacherName: 'صهيب القحطاني',
+  isLiveMonitoringEnabled: true,
 };
 
 // High quality initial educational summaries specifically prepared for ثاني متوسط
@@ -310,14 +314,14 @@ export const storageService = {
     }
   },
 
-  // Send heartbeat for online student presence
-  sendHeartbeat(studentId: string): void {
+  // Send heartbeat for online student presence & live CCTV telemetry
+  sendHeartbeat(studentId: string, metadata?: Partial<StudentLiveSession>): void {
     if (!studentId) return;
     try {
       fetch('/api/presence/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId }),
+        body: JSON.stringify({ studentId, ...(metadata || {}) }),
       }).catch(() => {});
     } catch (_) {}
   },
@@ -346,6 +350,7 @@ export const storageService = {
     students: Student[];
     summaries: SummaryItem[];
     onlineStudentIds: string[];
+    onlineSessions?: StudentLiveSession[];
     version: number;
   } | null> {
     try {
@@ -453,6 +458,7 @@ export const storageService = {
           students: finalStudents,
           summaries: validSummaries,
           onlineStudentIds: Array.isArray(data.onlineStudentIds) ? data.onlineStudentIds : [],
+          onlineSessions: Array.isArray(data.onlineSessions) ? data.onlineSessions : [],
           version: data.version || 0,
         };
       }

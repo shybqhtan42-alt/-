@@ -22,6 +22,25 @@ export interface SummaryItem {
   dateAdded: string;
   isImportant?: boolean;
   isExclusive?: boolean;
+  requiresStudentInfo?: boolean; // هل يحتاج كتابة بيانات الطالب قبل التنزيل
+}
+
+export interface StudentDownloadInfo {
+  studentName: string;
+  schoolName: string;
+  teacherName: string;
+}
+
+export interface StudentLiveSession {
+  studentId: string;
+  studentName: string;
+  grade?: string;
+  currentSection?: string;
+  currentSubject?: string;
+  currentAction?: string;
+  deviceType?: string;
+  lastSeen: number;
+  cameraCode?: string;
 }
 
 export interface SchoolConfig {
@@ -53,6 +72,10 @@ export interface SchoolConfig {
   isLatestSpotlightEnabled?: boolean;
   isHomeNavButtonsEnabled?: boolean;
   defaultGrade?: string; // 'سادس ابتدائي' | 'أول متوسط' | 'ثاني متوسط' | 'ثالث متوسط'
+  requireStudentInfoOnDownload?: boolean; // كتابة اسم الطالب والمدرسة والمعلم قبل تنزيل الملف
+  downloadStampPlacement?: 'header' | 'footer' | 'watermark' | 'both'; // مكان ظهور بيانات الطالب والمعلم في الملف
+  defaultTeacherName?: string; // اسم المعلم الافتراضي للملفات
+  isLiveMonitoringEnabled?: boolean; // تفعيل غرفة كاميرات المراقبة المدرسية
 }
 
 export const AVAILABLE_GRADES = [

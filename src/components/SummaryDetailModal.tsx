@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { SummaryItem, CurrentUser, SchoolConfig } from '../types';
+import { SummaryItem, CurrentUser, SchoolConfig, StudentDownloadInfo } from '../types';
 import { downloadSummaryDocument, downloadSummaryText } from '../utils/fileExport';
+import { StudentDownloadModal } from './StudentDownloadModal';
 import { 
   X, 
   Printer, 
@@ -49,6 +50,8 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
   const [previewTab, setPreviewTab] = useState<'worksheet' | 'pdf'>('worksheet');
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const [useFallbackData, setUseFallbackData] = useState(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [pendingDownloadType, setPendingDownloadType] = useState<'document' | 'text'>('document');
 
   React.useEffect(() => {
     setImageLoadFailed(false);
@@ -121,38 +124,34 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
     window.print();
   };
 
-  // Safe, complete file download: Native direct HTTP download from /uploads/ or base64 or generated document
-  const handleDownloadFile = () => {
-    const rawTarget = summary.attachmentUrl || fallbackUploadUrl || summary.attachmentData;
-    if (rawTarget && rawTarget.startsWith('/uploads/')) {
-      const link = document.createElement('a');
-      link.href = `${rawTarget}?download=1`;
-      link.download = summary.attachmentName || `${summary.title}.${summary.attachmentType === 'image' ? 'png' : 'pdf'}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } else if (summary.attachmentData && summary.attachmentData.startsWith('data:')) {
-      const link = document.createElement('a');
-      link.href = summary.attachmentData;
-      link.download = summary.attachmentName || `${summary.title}.${summary.attachmentType === 'image' ? 'png' : 'pdf'}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } else if (rawTarget && rawTarget.startsWith('http')) {
-      const link = document.createElement('a');
-      link.href = rawTarget;
-      link.download = summary.attachmentName || `${summary.title}.${summary.attachmentType === 'image' ? 'png' : 'pdf'}`;
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+  const requiresStudentVerification =
+    (config?.requireStudentInfoOnDownload ?? true) &&
+    (summary?.requiresStudentInfo ?? true);
+
+  const executeDownloadWithInfo = (info?: StudentDownloadInfo) => {
+    if (pendingDownloadType === 'text') {
+      downloadSummaryText(summary, config, info);
     } else {
-      downloadSummaryDocument(summary, config);
+      downloadSummaryDocument(summary, config, info);
+    }
+  };
+
+  const handleDownloadFile = () => {
+    setPendingDownloadType('document');
+    if (requiresStudentVerification) {
+      setIsDownloadModalOpen(true);
+    } else {
+      executeDownloadWithInfo();
     }
   };
 
   const handleDownloadText = () => {
-    downloadSummaryText(summary, config);
+    setPendingDownloadType('text');
+    if (requiresStudentVerification) {
+      setIsDownloadModalOpen(true);
+    } else {
+      executeDownloadWithInfo();
+    }
   };
 
   // Opens the file or image cleanly without about:blank errors
@@ -602,6 +601,20 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Verification modal before downloading */}
+      {config && (
+        <StudentDownloadModal
+          isOpen={isDownloadModalOpen}
+          onClose={() => setIsDownloadModalOpen(false)}
+          summary={summary}
+          config={config}
+          defaultStudentName={currentUser.role === 'student' ? currentUser.student?.fullName || '' : ''}
+          onConfirmDownload={(info) => {
+            executeDownloadWithInfo(info);
+          }}
+        />
+      )}
     </div>
   );
 };

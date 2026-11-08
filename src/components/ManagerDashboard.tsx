@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Student, SummaryItem, SchoolConfig, AVAILABLE_GRADES } from '../types';
+import { Student, SummaryItem, SchoolConfig, AVAILABLE_GRADES, StudentLiveSession } from '../types';
 import { storageService } from '../services/storageService';
+import { CCTVMonitorRoom } from './CCTVMonitorRoom';
 import { 
   Users, 
   FilePlus, 
@@ -36,7 +37,8 @@ import {
   Compass,
   ShieldCheck,
   Download,
-  Database
+  Database,
+  Video
 } from 'lucide-react';
 import { APP_IMAGES } from '../assets/images';
 
@@ -48,6 +50,7 @@ interface ManagerDashboardProps {
   summaries: SummaryItem[];
   onRefreshSummaries: () => void;
   onlineStudentIds?: string[];
+  onlineSessions?: StudentLiveSession[];
 }
 
 export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
@@ -58,8 +61,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   summaries,
   onRefreshSummaries,
   onlineStudentIds = [],
+  onlineSessions = [],
 }) => {
-  const [activeTab, setActiveTab] = useState<'students' | 'summaries' | 'images' | 'settings' | 'backup'>('students');
+  const [activeTab, setActiveTab] = useState<'students' | 'summaries' | 'images' | 'settings' | 'backup' | 'cctv'>('students');
 
   // Student Form State
   const [isAddingStudent, setIsAddingStudent] = useState(false);
@@ -83,6 +87,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [summaryCategory, setSummaryCategory] = useState<'ملخصات' | 'أوراق عمل' | 'الكتب الدراسية'>('ملخصات');
   const [summaryText, setSummaryText] = useState('');
   const [summaryIsImportant, setSummaryIsImportant] = useState<boolean>(true);
+  const [summaryRequiresStudentInfo, setSummaryRequiresStudentInfo] = useState<boolean>(true);
   const [summaryFilterTab, setSummaryFilterTab] = useState<'all' | 'important'>('all');
   const [summaryGradeFilter, setSummaryGradeFilter] = useState<string>('الكل');
   const [attachmentUrl, setAttachmentUrl] = useState<string>('');
@@ -466,6 +471,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         attachmentName: attachmentName || undefined,
         isImportant: summaryIsImportant,
         isExclusive: summaryIsImportant,
+        requiresStudentInfo: summaryRequiresStudentInfo,
       });
 
       showToast(summaryIsImportant 
@@ -685,6 +691,22 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           >
             <Database className="w-4 h-4 text-emerald-700 shrink-0" />
             <span className="truncate">نسخة احتياطية للبرنامج</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('cctv')}
+            className={`flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all text-center cursor-pointer ${
+              activeTab === 'cctv'
+                ? 'bg-slate-950 text-emerald-400 shadow-md border-2 border-red-500 ring-2 ring-red-500/20'
+                : 'text-slate-700 hover:text-slate-900 hover:bg-white/70'
+            }`}
+          >
+            <Video className="w-4 h-4 text-red-500 shrink-0 animate-pulse" />
+            <span className="truncate flex items-center gap-1.5">
+              <span>كاميرات المراقبة الحية</span>
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+            </span>
           </button>
         </div>
       </div>
@@ -1206,6 +1228,28 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                     </div>
                     <p className="text-[11px] text-amber-800 leading-relaxed">
                       عند تحديد هذا الخيار، يتم قفل المحتوى بعلامة النجمة ولا يفتح للزائر إلا بعد تسجيل الدخول بحسابه كطالب مسجل.
+                    </p>
+                  </label>
+                </div>
+
+                {/* Require Student Info on Download for this Summary */}
+                <div className="bg-emerald-50/90 p-4 rounded-xl border border-emerald-300 flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="managerRequiresStudentInfoToggle"
+                    checked={summaryRequiresStudentInfo}
+                    onChange={(e) => setSummaryRequiresStudentInfo(e.target.checked)}
+                    className="w-4 h-4 text-emerald-700 rounded mt-0.5 accent-emerald-600 cursor-pointer shrink-0"
+                  />
+                  <label htmlFor="managerRequiresStudentInfoToggle" className="text-xs text-emerald-950 cursor-pointer space-y-1">
+                    <div className="font-extrabold flex items-center gap-1.5 text-emerald-900">
+                      <span>📄 توثيق بيانات الطالب (اسم الطالب + المدرسة + المعلم) قبل تنزيل الملف</span>
+                      <span className="text-[10px] bg-emerald-200 text-emerald-900 font-bold px-2 py-0.5 rounded-full">
+                        خيار حر للمدير
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800 leading-relaxed">
+                      عند تحديد هذا الخيار، سيُطلب من الطالب كتابة اسمه ومدرسته ومعلمه قبل تنزيل هذا الملف وطباعته معتمداً في الموضع الذي حددته. يمكنك إلغاؤه للسماح بالتنزيل المباشر لهذا الملف دون كتابة بيانات.
                     </p>
                   </label>
                 </div>
@@ -2786,6 +2830,131 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               </p>
             </div>
 
+            {/* Student Download Verification & Stamp Settings Card (طلب بيانات الطالب قبل التنزيل) */}
+            <div className="bg-emerald-50/90 p-5 rounded-2xl border-2 border-emerald-400 space-y-4 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-200">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2.5 bg-emerald-700 text-white rounded-xl shadow-xs shrink-0">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                      <span>خانة توثيق بيانات الطالب والمدرسة والمعلم عند تنزيل الملفات</span>
+                      <span className="text-[10px] bg-emerald-200 text-emerald-950 font-extrabold px-2 py-0.5 rounded-full">
+                        ميزة حصرية للمدير
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-600 font-semibold mt-0.5">
+                      قبل تنزيل الطالب للملف، يكتب اسمه والمدرسة والمعلم وتظهر في الموضع الذي تحدده أنت كمدير، مع كامل الحرية لتفعيله أو إلغائه.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Instant Master Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentVal = settingsForm.requireStudentInfoOnDownload !== false;
+                    const newVal = !currentVal;
+                    handleToggleSettingInstant(
+                      'requireStudentInfoOnDownload',
+                      newVal,
+                      newVal
+                        ? 'تم تفعيل إلزام كتابة بيانات الطالب قبل التنزيل وتعميمها فوراً!'
+                        : 'تم إلغاء طلب البيانات وإتاحة التنزيل المباشر للطلاب فوراً!'
+                    );
+                  }}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 shadow-xs ${
+                    settingsForm.requireStudentInfoOnDownload !== false
+                      ? 'bg-emerald-700 hover:bg-emerald-800 text-white border border-emerald-600'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white'
+                  }`}
+                >
+                  {settingsForm.requireStudentInfoOnDownload !== false ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>طلب البيانات: مفعل (إلزامي)</span>
+                    </>
+                  ) : (
+                    <>
+                      <X className="w-4 h-4" />
+                      <span>طلب البيانات: ملغي (تنزيل حر)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Placement Selector and Teacher Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                {/* Stamp Placement */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-900">
+                      موضع ظهور بيانات الطالب والمعلم في الملف:
+                    </label>
+                    <span className="text-[10px] text-emerald-700 font-bold">تطبيق فوري</span>
+                  </div>
+                  <select
+                    value={settingsForm.downloadStampPlacement || 'header'}
+                    onChange={(e) => {
+                      const val = e.target.value as any;
+                      setIsSettingsDirty(true);
+                      setSettingsForm({ ...settingsForm, downloadStampPlacement: val });
+                      handleToggleSettingInstant(
+                        'downloadStampPlacement',
+                        val,
+                        `تم تغيير موضع توثيق بيانات الطالب إلى (${
+                          val === 'header' ? 'أعلى الملف' : val === 'footer' ? 'أسفل الملف' : val === 'watermark' ? 'علامة مائية' : 'أعلى وأسفل معاً'
+                        }) بنجاح!`
+                      );
+                    }}
+                    className="w-full px-3 py-2.5 bg-white border-2 border-emerald-400 rounded-xl text-xs font-bold text-slate-900 focus:ring-1 focus:ring-emerald-600 cursor-pointer"
+                  >
+                    <option value="header">ترويسة رسمية في أعلى الملف (Header)</option>
+                    <option value="footer">ختم واعتماد في أسفل الملف (Footer)</option>
+                    <option value="watermark">علامة مائية أمنية في خلفية المستند (Watermark)</option>
+                    <option value="both">ترويسة بالأعلى وختم اعتماد بالأسفل معاً (كامل)</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500">
+                    يحدد أين ستطبع بيانات اسم الطالب والمدرسة والمعلم داخل وثيقة الـ PDF وورقة العمل المحمّلة.
+                  </p>
+                </div>
+
+                {/* Default Teacher Name */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-900">
+                      اسم المعلم الافتراضي للملفات:
+                    </label>
+                    <span className="text-[10px] text-emerald-700 font-bold">حفظ تلقائي</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={settingsForm.defaultTeacherName !== undefined ? settingsForm.defaultTeacherName : (config.defaultTeacherName || 'صهيب القحطاني')}
+                      onChange={(e) => {
+                        setIsSettingsDirty(true);
+                        setSettingsForm({ ...settingsForm, defaultTeacherName: e.target.value });
+                      }}
+                      onBlur={(e) => handleAutoSaveField('defaultTeacherName', e.target.value)}
+                      placeholder="مثال: صهيب القحطاني"
+                      className="flex-1 px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-900 focus:ring-1 focus:ring-emerald-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAutoSaveField('defaultTeacherName', settingsForm.defaultTeacherName || 'صهيب القحطاني')}
+                      className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shrink-0 cursor-pointer"
+                    >
+                      تثبيت
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    الاسم الذي يظهر للطالب تلقائياً في خانة «اسم المعلم / المشرف» عند التنزيل.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Custom / Permanent App URL */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -2961,6 +3130,16 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB 6: CCTV LIVE MONITORING ROOM */}
+      {activeTab === 'cctv' && (
+        <CCTVMonitorRoom
+          students={students}
+          onlineSessions={onlineSessions || []}
+          config={config}
+          onRefresh={onRefreshStudents}
+        />
       )}
     </div>
   );

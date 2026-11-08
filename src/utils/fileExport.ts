@@ -1,7 +1,7 @@
-import { SummaryItem, SchoolConfig } from '../types';
+import { SummaryItem, SchoolConfig, StudentDownloadInfo } from '../types';
 
 function escapeHtml(str: string): string {
-  return str
+  return (str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -24,20 +24,23 @@ function triggerDownload(blob: Blob, filename: string) {
 
 /**
  * Downloads the summary as a complete, self-contained educational document or native attachment.
- * Opens 100% reliably in Google Chrome, Phone Files, Google Drive, and Any Browser
- * without navigating away from the page or resetting the app.
+ * If studentInfo is provided, stamps student name, school name, and teacher name in the place
+ * determined by the manager (header, footer, watermark, or both).
  */
 export async function downloadSummaryDocument(
   summary: SummaryItem,
-  config?: Partial<SchoolConfig>
+  config?: Partial<SchoolConfig>,
+  studentInfo?: StudentDownloadInfo
 ) {
-  const schoolName = config?.schoolName || 'مدرسة عبد الملك بن مروان';
+  const schoolName = studentInfo?.schoolName || config?.schoolName || 'مدرسة عبد الملك بن مروان';
   const authorName = config?.authorName || 'صهيب القحطاني';
+  const teacherName = studentInfo?.teacherName || config?.defaultTeacherName || authorName || 'أ. صهيب القحطاني';
   const platformTitle = config?.platformTitle || 'منصة البشير التعليمية';
   const yearHijri = config?.yearHijri || '1448';
   const yearGregorian = config?.yearGregorian || '2026';
+  const placement = config?.downloadStampPlacement || 'header';
 
-  const safeTitle = summary.title.replace(/[/\\?%*:|"<>]/g, '_').trim();
+  const safeTitle = (summary.title || 'ملخص_تعليمي').replace(/[/\\?%*:|"<>]/g, '_').trim();
   const isImage =
     summary.attachmentType === 'image' ||
     Boolean(summary.attachmentName?.match(/\.(png|jpe?g|webp|gif|svg)$/i)) ||
@@ -56,48 +59,53 @@ export async function downloadSummaryDocument(
     ? summary.attachmentUrl
     : null;
 
-  // 1. If summary has a valid Base64 Data URL (PDF or Image): download the file directly via Blob
-  if (dataSource) {
-    try {
-      const parts = dataSource.split(',');
-      const mime = parts[0].match(/:(.*?);/)?.[1] || (isImage ? 'image/png' : 'application/pdf');
-      const byteString = atob(parts[1]);
-      const ab = new ArrayBuffer(byteString.length);
-      const ia = new Uint8Array(ab);
-      for (let i = 0; i < byteString.length; i++) {
-        ia[i] = byteString.charCodeAt(i);
-      }
-      const blob = new Blob([ab], { type: mime });
-      triggerDownload(blob, safeFilename);
-      return;
-    } catch (e) {
-      console.warn('Failed base64 data download fallback:', e);
-    }
-  }
-
-  // 2. If summary has a server URL (like /uploads/... or http): fetch as blob and download safely
-  if (summary.attachmentUrl && (summary.attachmentUrl.startsWith('/') || summary.attachmentUrl.startsWith('http'))) {
-    try {
-      const res = await fetch(summary.attachmentUrl);
-      if (res.ok) {
-        const contentType = res.headers.get('content-type') || '';
-        // If the server returned HTML for a non-HTML file (e.g. 404 falling back to index.html), reject it
-        if (!contentType.includes('text/html') || safeFilename.endsWith('.html')) {
-          const blob = await res.blob();
-          triggerDownload(blob, safeFilename);
-          return;
+  // If no student personalization is requested AND there is a direct binary attachment, download directly
+  if (!studentInfo) {
+    // 1. Base64 binary
+    if (dataSource) {
+      try {
+        const parts = dataSource.split(',');
+        const mime = parts[0].match(/:(.*?);/)?.[1] || (isImage ? 'image/png' : 'application/pdf');
+        const byteString = atob(parts[1]);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+          ia[i] = byteString.charCodeAt(i);
         }
+        const blob = new Blob([ab], { type: mime });
+        triggerDownload(blob, safeFilename);
+        return;
+      } catch (e) {
+        console.warn('Failed base64 data download fallback:', e);
       }
-    } catch (err) {
-      console.warn('Direct fetch failed, falling back to document generator:', err);
+    }
+
+    // 2. Server URL
+    if (summary.attachmentUrl && (summary.attachmentUrl.startsWith('/') || summary.attachmentUrl.startsWith('http'))) {
+      try {
+        const res = await fetch(summary.attachmentUrl);
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (!contentType.includes('text/html') || safeFilename.endsWith('.html')) {
+            const blob = await res.blob();
+            triggerDownload(blob, safeFilename);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Direct fetch failed, falling back to document generator:', err);
+      }
     }
   }
 
-  // 3. For all educational summaries: generate a standalone, self-contained educational document!
-  // This document has INLINE STYLES, embedded Arabic styling, no external dependencies,
-  // and renders 100% perfectly in Google Chrome, phone file viewers, Google Drive,
-  // and includes a one-click Print / Save as PDF button.
-  const filename = `${safeTitle} - ${summary.subject} - ${summary.grade || 'المقرر'}.html`;
+  // Generate a personalized, self-contained educational document!
+  const filename = studentInfo?.studentName
+    ? `${safeTitle} - الطالب ${studentInfo.studentName.replace(/[/\\?%*:|"<>]/g, '_')}.html`
+    : `${safeTitle} - ${summary.subject} - ${summary.grade || 'المقرر'}.html`;
+
+  const showHeaderStamp = Boolean(studentInfo) && (placement === 'header' || placement === 'both');
+  const showFooterStamp = Boolean(studentInfo) && (placement === 'footer' || placement === 'both');
+  const showWatermark = Boolean(studentInfo) && (placement === 'watermark' || placement === 'both');
 
   const htmlContent = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -117,13 +125,14 @@ export async function downloadSummaryDocument(
       line-height: 1.8;
     }
     .sheet {
-      max-width: 820px;
+      max-width: 840px;
       margin: 0 auto;
       background: #ffffff;
       border-radius: 20px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.08);
       border: 1px solid #cbd5e1;
       overflow: hidden;
+      position: relative;
     }
     .sheet-header {
       background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%);
@@ -173,8 +182,55 @@ export async function downloadSummaryDocument(
       border-radius: 8px;
       font-weight: 700;
     }
+    /* Official Student & Teacher Identification Stamp (Header) */
+    .student-stamp-banner {
+      background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+      border: 2px solid #f59e0b;
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-top: 16px;
+      color: #78350f;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+    }
+    .stamp-header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      border-bottom: 1px dashed #f59e0b;
+      padding-bottom: 6px;
+    }
+    .stamp-title-badge {
+      font-size: 12px;
+      font-weight: 900;
+      background: #f59e0b;
+      color: #ffffff;
+      padding: 3px 10px;
+      border-radius: 6px;
+    }
+    .stamp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      font-size: 13px;
+    }
+    .stamp-cell {
+      display: flex;
+      flex-direction: column;
+    }
+    .stamp-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #92400e;
+    }
+    .stamp-value {
+      font-size: 14px;
+      font-weight: 900;
+      color: #451a03;
+    }
     .sheet-body {
       padding: 28px 24px;
+      position: relative;
     }
     .section-label {
       font-size: 13px;
@@ -195,6 +251,67 @@ export async function downloadSummaryDocument(
       font-weight: 600;
       line-height: 2;
       white-space: pre-line;
+      position: relative;
+      z-index: 1;
+    }
+    .attachment-preview-box {
+      margin-top: 20px;
+      padding: 16px;
+      background: #f8fafc;
+      border: 2px dashed #cbd5e1;
+      border-radius: 14px;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+    .attachment-preview-box img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+    /* Official Student & Teacher Endorsement Stamp (Footer) */
+    .student-stamp-footer {
+      background: #ecfdf5;
+      border: 2px solid #10b981;
+      border-radius: 12px;
+      padding: 12px 18px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #065f46;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .stamp-seal-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #047857;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      shrink-0;
+      box-shadow: 0 2px 6px rgba(4,120,87,0.3);
+    }
+    /* Watermark */
+    .watermark-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-25deg);
+      font-size: 26px;
+      font-weight: 900;
+      color: rgba(6, 78, 59, 0.05);
+      pointer-events: none;
+      white-space: nowrap;
+      user-select: none;
+      z-index: 0;
+      text-align: center;
+      width: 100%;
     }
     .footer-bar {
       background: #f8fafc;
@@ -218,6 +335,7 @@ export async function downloadSummaryDocument(
       font-size: 13px;
       cursor: pointer;
       box-shadow: 0 2px 6px rgba(4,120,87,0.3);
+      transition: background 0.2s;
     }
     .print-button:hover {
       background: #065f46;
@@ -234,21 +352,75 @@ export async function downloadSummaryDocument(
     <div class="sheet-header">
       <div class="school-info">
         <div class="school-name">${escapeHtml(schoolName)} · ${escapeHtml(platformTitle)}</div>
-        <div class="badge">ملخص دراسي معتمد</div>
+        <div class="badge">ملخص دراسي رسمي معتمد</div>
       </div>
       <h1 class="sheet-title">${escapeHtml(summary.title)}</h1>
       <div class="meta-tags">
         <span class="meta-tag">المادة: ${escapeHtml(summary.subject)}</span>
         <span class="meta-tag">الصف: ${escapeHtml(summary.grade)}</span>
         <span class="meta-tag">التصنيف: ${escapeHtml(summary.category || 'الملخصات')}</span>
-        <span class="meta-tag">إعداد: ${escapeHtml(authorName)}</span>
+        <span class="meta-tag">المعلم: ${escapeHtml(teacherName)}</span>
         <span class="meta-tag">العام الدراسي: ${escapeHtml(yearHijri)} هـ / ${escapeHtml(yearGregorian)} م</span>
       </div>
+
+      ${showHeaderStamp && studentInfo ? `
+      <!-- Official Header Stamp Box as specified by manager -->
+      <div class="student-stamp-banner">
+        <div class="stamp-header-top">
+          <span class="stamp-title-badge">بيانات توثيق الطالب والملف المعتمد ✓</span>
+          <span style="font-size: 11px; font-weight: 800;">تاريخ التنزيل: ${new Date().toLocaleDateString('ar-SA')} م</span>
+        </div>
+        <div class="stamp-grid">
+          <div class="stamp-cell">
+            <span class="stamp-label">اسم الطالب:</span>
+            <span class="stamp-value">${escapeHtml(studentInfo.studentName)}</span>
+          </div>
+          <div class="stamp-cell">
+            <span class="stamp-label">المدرسة:</span>
+            <span class="stamp-value">${escapeHtml(studentInfo.schoolName)}</span>
+          </div>
+          <div class="stamp-cell">
+            <span class="stamp-label">المعلم المشرف:</span>
+            <span class="stamp-value">${escapeHtml(studentInfo.teacherName)}</span>
+          </div>
+          <div class="stamp-cell">
+            <span class="stamp-label">الصف الدراسي:</span>
+            <span class="stamp-value">${escapeHtml(summary.grade)}</span>
+          </div>
+        </div>
+      </div>
+      ` : ''}
     </div>
+
     <div class="sheet-body">
+      ${showWatermark && studentInfo ? `
+      <div class="watermark-overlay">
+        ${escapeHtml(studentInfo.studentName)} · ${escapeHtml(studentInfo.schoolName)} · إشراف: ${escapeHtml(studentInfo.teacherName)}
+      </div>
+      ` : ''}
+
       <div class="section-label">محتوى الملخص والشرح الدراسي:</div>
       <div class="summary-text-box">${escapeHtml(summary.summaryText)}</div>
+
+      ${(dataSource || summary.attachmentUrl) && isImage ? `
+      <div class="attachment-preview-box">
+        <div style="font-size: 12px; font-weight: 800; color: #475569; margin-bottom: 8px;">مرفق الملف التعليمي المعتمد:</div>
+        <img src="${escapeHtml(dataSource || summary.attachmentUrl || '')}" alt="${escapeHtml(summary.title)}" />
+      </div>
+      ` : ''}
+
+      ${showFooterStamp && studentInfo ? `
+      <!-- Official Footer Stamp Box as specified by manager -->
+      <div class="student-stamp-footer" style="margin-top: 24px;">
+        <div class="stamp-seal-circle">✓</div>
+        <div>
+          <div>تم توثيق واعتماد هذا المستند رسميًا للطالب: <strong style="color: #064e3b; font-size: 14px;">${escapeHtml(studentInfo.studentName)}</strong></div>
+          <div style="font-size: 11px; color: #047857; margin-top: 2px;">مدرسة: ${escapeHtml(studentInfo.schoolName)} · إشراف الأستاذ: <strong>${escapeHtml(studentInfo.teacherName)}</strong> · ${new Date().toLocaleDateString('ar-SA')} م</div>
+        </div>
+      </div>
+      ` : ''}
     </div>
+
     <div class="footer-bar">
       <div>حقوق الطبع والتوثيق محفوظة · ${escapeHtml(schoolName)}</div>
       <button class="print-button no-print" onclick="window.print()">طباعة / حفظ كـ PDF</button>
@@ -266,19 +438,32 @@ export async function downloadSummaryDocument(
  */
 export function downloadSummaryText(
   summary: SummaryItem,
-  config?: Partial<SchoolConfig>
+  config?: Partial<SchoolConfig>,
+  studentInfo?: StudentDownloadInfo
 ) {
-  const schoolName = config?.schoolName || 'مدرسة عبد الملك بن مروان';
+  const schoolName = studentInfo?.schoolName || config?.schoolName || 'مدرسة عبد الملك بن مروان';
   const authorName = config?.authorName || 'صهيب القحطاني';
+  const teacherName = studentInfo?.teacherName || config?.defaultTeacherName || authorName || 'صهيب القحطاني';
   const platformTitle = config?.platformTitle || 'منصة البشير التعليمية';
   const yearHijri = config?.yearHijri || '1448';
   const yearGregorian = config?.yearGregorian || '2026';
 
-  const content = `===============================================================
+  let headerBanner = `===============================================================
 ${platformTitle} - ${schoolName}
-إعداد وتطوير: ${authorName}
+إشراف المعلم: ${teacherName}
 العام الدراسي: ${yearHijri} هـ / ${yearGregorian} م
-===============================================================
+===============================================================`;
+
+  if (studentInfo?.studentName) {
+    headerBanner += `\nبيانات توثيق الطالب:
+اسم الطالب: ${studentInfo.studentName}
+المدرسة: ${studentInfo.schoolName}
+المعلم المشرف: ${studentInfo.teacherName}
+تاريخ التنزيل: ${new Date().toLocaleDateString('ar-SA')}
+===============================================================`;
+  }
+
+  const content = `${headerBanner}
 عنوان الملخص: ${summary.title}
 المادة: ${summary.subject}
 الصف: ${summary.grade}
@@ -289,11 +474,12 @@ ${platformTitle} - ${schoolName}
 ---------------------------------------------------------------
 ${summary.summaryText}
 ===============================================================
-وثيقة وملخص دراسي معتمد - مدرسة عبد الملك بن مروان
+حقوق الطبع والتوثيق محفوظة لمدرسة ${schoolName}
 `;
 
-  const safeTitle = summary.title.replace(/[/\\?%*:|"<>]/g, '_').trim();
-  const filename = `${safeTitle} - نص الملخص.txt`;
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const filename = studentInfo?.studentName
+    ? `${summary.title} - الطالب ${studentInfo.studentName.replace(/[/\\?%*:|"<>]/g, '_')}.txt`
+    : `${summary.title} - ${summary.subject}.txt`;
   triggerDownload(blob, filename);
 }

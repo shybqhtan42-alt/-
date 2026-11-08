@@ -50,6 +50,10 @@ const DEFAULT_CONFIG = {
   isLatestSpotlightEnabled: false,
   isHomeNavButtonsEnabled: true,
   defaultGrade: 'ثاني متوسط',
+  requireStudentInfoOnDownload: true,
+  downloadStampPlacement: 'header' as const,
+  defaultTeacherName: 'صهيب القحطاني',
+  isLiveMonitoringEnabled: true,
 };
 
 const INITIAL_SUMMARIES = [
@@ -455,14 +459,42 @@ async function startServer() {
     res.status(200).send('OK');
   });
 
-  // Online students presence tracking (last active timestamp per student ID)
-  const onlineStudentsMap = new Map<string, number>();
+  // Online students presence & live CCTV telemetry tracking
+  interface LiveStudentSession {
+    studentId: string;
+    studentName: string;
+    grade?: string;
+    currentSection?: string;
+    currentSubject?: string;
+    currentAction?: string;
+    deviceType?: string;
+    lastSeen: number;
+    cameraCode?: string;
+  }
 
-  // Heartbeat endpoint for active students
+  const liveSessionsMap = new Map<string, LiveStudentSession>();
+
+  // Heartbeat endpoint for active students with live CCTV telemetry
   app.post('/api/presence/heartbeat', (req, res) => {
-    const { studentId } = req.body || {};
+    const { studentId, studentName, grade, currentSection, currentSubject, currentAction, deviceType } = req.body || {};
     if (studentId && typeof studentId === 'string') {
-      onlineStudentsMap.set(studentId, Date.now());
+      const existing = liveSessionsMap.get(studentId);
+      let cameraCode = existing?.cameraCode;
+      if (!cameraCode) {
+        const count = liveSessionsMap.size + 1;
+        cameraCode = `CAM-${count < 10 ? '0' + count : count}`;
+      }
+      liveSessionsMap.set(studentId, {
+        studentId,
+        studentName: studentName || existing?.studentName || 'طالب متصل',
+        grade: grade || existing?.grade || 'ثاني متوسط',
+        currentSection: currentSection || existing?.currentSection || 'الصفحة الرئيسية',
+        currentSubject: currentSubject || existing?.currentSubject || 'عام',
+        currentAction: currentAction || existing?.currentAction || 'تصفح المنصة',
+        deviceType: deviceType || existing?.deviceType || 'جوال (Android/iOS)',
+        lastSeen: Date.now(),
+        cameraCode,
+      });
     }
     res.json({ success: true, timestamp: Date.now() });
   });
@@ -471,9 +503,26 @@ async function startServer() {
   app.post('/api/presence/offline', (req, res) => {
     const { studentId } = req.body || {};
     if (studentId && typeof studentId === 'string') {
-      onlineStudentsMap.delete(studentId);
+      liveSessionsMap.delete(studentId);
     }
     res.json({ success: true });
+  });
+
+  // Dedicated CCTV live camera feeds endpoint
+  app.get('/api/presence/cameras', (req, res) => {
+    const now = Date.now();
+    const activeThreshold = 20000;
+    const activeFeeds: LiveStudentSession[] = [];
+    liveSessionsMap.forEach((session, id) => {
+      if (now - session.lastSeen <= activeThreshold) {
+        activeFeeds.push(session);
+      }
+    });
+    res.json({
+      cameras: activeFeeds,
+      totalActive: activeFeeds.length,
+      timestamp: now,
+    });
   });
 
   // --- API ROUTES ---
@@ -481,16 +530,18 @@ async function startServer() {
   // 1. Full state sync endpoint (used by all devices to sync on load and poll every 3 seconds)
   app.get('/api/sync', (req, res) => {
     const now = Date.now();
-    // Student is considered online if heartbeat was received within the last 15 seconds
-    const activeThreshold = 15000;
+    // Student is considered online if heartbeat was received within the last 18 seconds
+    const activeThreshold = 18000;
     const onlineStudentIds: string[] = [];
+    const onlineSessions: LiveStudentSession[] = [];
 
-    onlineStudentsMap.forEach((lastSeen, id) => {
-      if (now - lastSeen <= activeThreshold) {
+    liveSessionsMap.forEach((session, id) => {
+      if (now - session.lastSeen <= activeThreshold) {
         onlineStudentIds.push(id);
-      } else if (now - lastSeen > 60000) {
+        onlineSessions.push(session);
+      } else if (now - session.lastSeen > 60000) {
         // cleanup stale records after 1 minute
-        onlineStudentsMap.delete(id);
+        liveSessionsMap.delete(id);
       }
     });
 
@@ -514,6 +565,7 @@ async function startServer() {
       deletedSummaryIds: db.deletedSummaryIds || [],
       deletedStudentIds: db.deletedStudentIds || [],
       onlineStudentIds,
+      onlineSessions,
       version: db.version,
       lastUpdated: db.lastUpdated,
       lastUpdatedTimestamp: db.lastUpdatedTimestamp,
@@ -615,6 +667,10 @@ async function startServer() {
       isGamesTabEnabled: incoming.isGamesTabEnabled !== undefined ? Boolean(incoming.isGamesTabEnabled) : Boolean(db.config.isGamesTabEnabled),
       isLatestSpotlightEnabled: incoming.isLatestSpotlightEnabled !== undefined ? Boolean(incoming.isLatestSpotlightEnabled) : Boolean(db.config.isLatestSpotlightEnabled),
       defaultGrade: incoming.defaultGrade || db.config.defaultGrade || 'ثاني متوسط',
+      requireStudentInfoOnDownload: incoming.requireStudentInfoOnDownload !== undefined ? Boolean(incoming.requireStudentInfoOnDownload) : Boolean(db.config.requireStudentInfoOnDownload ?? true),
+      downloadStampPlacement: incoming.downloadStampPlacement || db.config.downloadStampPlacement || 'header',
+      defaultTeacherName: incoming.defaultTeacherName || db.config.defaultTeacherName || 'صهيب القحطاني',
+      isLiveMonitoringEnabled: incoming.isLiveMonitoringEnabled !== undefined ? Boolean(incoming.isLiveMonitoringEnabled) : Boolean(db.config.isLiveMonitoringEnabled ?? true),
       isManagerConfigured: true,
       lastUpdatedTimestamp: timestamp,
     };

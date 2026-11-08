@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SchoolConfig, Student, SummaryItem, CurrentUser } from './types';
+import { SchoolConfig, Student, SummaryItem, CurrentUser, StudentLiveSession } from './types';
 import { storageService, DEFAULT_CONFIG } from './services/storageService';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -35,6 +35,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser>({ role: 'guest' });
   const [favorites, setFavorites] = useState<string[]>(() => storageService.getFavorites());
   const [onlineStudentIds, setOnlineStudentIds] = useState<string[]>([]);
+  const [onlineSessions, setOnlineSessions] = useState<StudentLiveSession[]>([]);
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [navigatingBtnId, setNavigatingBtnId] = useState<string | null>(null);
@@ -101,6 +102,10 @@ export default function App() {
         if (Array.isArray(serverState.onlineStudentIds)) {
           setOnlineStudentIds(serverState.onlineStudentIds);
         }
+
+        if (Array.isArray(serverState.onlineSessions)) {
+          setOnlineSessions(serverState.onlineSessions);
+        }
       }
     };
 
@@ -127,28 +132,51 @@ export default function App() {
     };
   }, []);
 
-  // Heartbeat effect: When a student is logged in, continuously send heartbeat every 6 seconds
+  // Heartbeat effect: Continuously sends live telemetry for the CCTV surveillance system
   useEffect(() => {
-    if (currentUser.role === 'student' && currentUser.student?.id) {
-      const studentId = currentUser.student.id;
-      // Send immediately
-      storageService.sendHeartbeat(studentId);
+    const studentId = currentUser.role === 'student' && currentUser.student?.id
+      ? currentUser.student.id
+      : 'guest_user';
 
-      const heartbeatInterval = setInterval(() => {
-        storageService.sendHeartbeat(studentId);
-      }, 6000);
+    const getTelemetry = () => ({
+      studentName: currentUser.role === 'student'
+        ? (currentUser.student?.fullName || 'طالب مسجل')
+        : 'زائر / طالب يتصفح',
+      grade: currentUser.role === 'student'
+        ? (currentUser.student?.grade || config.defaultGrade || 'ثاني متوسط')
+        : (config.defaultGrade || 'ثاني متوسط'),
+      currentSection: activeTab === 'second-intermediate'
+        ? `بوابة ملخصات ${config.defaultGrade || 'ثاني متوسط'}`
+        : activeTab === 'games'
+        ? 'لعبة الملازم أنس'
+        : activeTab === 'about'
+        ? 'عن المنصة'
+        : 'الصفحة الرئيسية',
+      currentSubject: selectedSummary ? selectedSummary.subject : 'تصفح عام',
+      currentAction: selectedSummary ? `يطلع على: ${selectedSummary.title}` : 'يتصفح المواد الدراسية',
+      deviceType: /Android/i.test(navigator.userAgent)
+        ? 'جوال ذكي (أندرويد)'
+        : /iPhone|iPad/i.test(navigator.userAgent)
+        ? 'جوال آيفون (iOS)'
+        : 'كمبيوتر / لابتوب',
+    });
 
-      const handleUnload = () => {
-        storageService.sendOffline(studentId);
-      };
-      window.addEventListener('beforeunload', handleUnload);
+    storageService.sendHeartbeat(studentId, getTelemetry());
 
-      return () => {
-        clearInterval(heartbeatInterval);
-        window.removeEventListener('beforeunload', handleUnload);
-      };
-    }
-  }, [currentUser]);
+    const heartbeatInterval = setInterval(() => {
+      storageService.sendHeartbeat(studentId, getTelemetry());
+    }, 5000);
+
+    const handleUnload = () => {
+      storageService.sendOffline(studentId);
+    };
+    window.addEventListener('beforeunload', handleUnload);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  }, [currentUser, activeTab, selectedSummary, config.defaultGrade]);
 
   const handleUpdateConfig = (newConfig: SchoolConfig) => {
     setConfig(newConfig);
@@ -894,6 +922,7 @@ export default function App() {
               summaries={summaries}
               onRefreshSummaries={handleRefreshSummaries}
               onlineStudentIds={onlineStudentIds}
+              onlineSessions={onlineSessions}
             />
           ) : (
             <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center max-w-lg mx-auto space-y-4 shadow-sm">
