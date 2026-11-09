@@ -260,10 +260,10 @@ export async function downloadStampedImage(
     ctx.lineTo(emblemX + 7, emblemY - 8);
     ctx.stroke();
 
-    // Gold ribbon banner at bottom of emblem
+    // Ribbon banner at bottom of emblem
     ctx.fillStyle = '#065f46';
     ctx.beginPath();
-    ctx.roundRect(emblemX - 44, emblemY + 14, 88, 20, 5);
+    ctx.roundRect(emblemX - 52, emblemY + 14, 104, 22, 6);
     ctx.fill();
     ctx.strokeStyle = '#f59e0b';
     ctx.lineWidth = 1.5;
@@ -272,7 +272,7 @@ export async function downloadStampedImage(
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 11px "Cairo", Tahoma, sans-serif';
-    ctx.fillText('مطوية معتمدة', emblemX, emblemY + 28);
+    ctx.fillText('البشير التعليمي', emblemX, emblemY + 29);
     ctx.restore();
   }
 
