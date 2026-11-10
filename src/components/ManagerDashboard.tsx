@@ -1027,12 +1027,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                               {isOnline ? (
                                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
                                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                  <span>متاح الآن</span>
+                                  <span>متصل الآن • {new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                   <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                  <span>غير متاح</span>
+                                  <span>آخر ظهور: {student.lastSeenFormatted || `اليوم • ${new Date(student.lastSeenTimestamp || Date.now()).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}`}</span>
                                 </span>
                               )}
                             </div>

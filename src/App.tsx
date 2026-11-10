@@ -184,26 +184,48 @@ export default function App() {
       grade: currentUser.role === 'student'
         ? (currentUser.student?.grade || config.defaultGrade || 'ثاني متوسط')
         : (config.defaultGrade || 'ثاني متوسط'),
-      currentSection: activeTab === 'second-intermediate'
+      currentSection: isLoginModalOpen
+        ? 'نافذة تسجيل دخول الطالب'
+        : selectedSummary
+        ? `معاينة ورقة: ${selectedSummary.title}`
+        : activeTab === 'second-intermediate'
         ? `بوابة ملخصات ${config.defaultGrade || 'ثاني متوسط'}`
+        : activeTab === 'summaries'
+        ? 'قسم المواد والملخصات'
         : activeTab === 'games'
-        ? 'لعبة الملازم أنس'
+        ? 'قسم الألعاب - لعبة دورية أمن الطرق'
         : activeTab === 'about'
         ? 'عن المنصة'
         : 'الصفحة الرئيسية',
-      currentSubject: selectedSummary ? selectedSummary.subject : 'تصفح عام',
-      currentAction: selectedSummary ? `يطلع على: ${selectedSummary.title}` : 'يتصفح المواد الدراسية',
+      currentSubject: selectedSummary
+        ? selectedSummary.subject
+        : (activeTab === 'summaries' || activeTab === 'second-intermediate' ? 'المواد الدراسية' : 'تصفح عام'),
+      currentAction: isLoginModalOpen
+        ? 'يقوم بتسجيل الدخول للمنصة'
+        : selectedSummary
+        ? `يطلع على ورقة: ${selectedSummary.title}`
+        : activeTab === 'second-intermediate'
+        ? 'يتصفح بوابة ثاني متوسط'
+        : activeTab === 'summaries'
+        ? 'يستعرض قسم المواد والملخصات'
+        : activeTab === 'games'
+        ? 'يلعب في دورية أمن الطرق'
+        : 'يتصفح الصفحة الرئيسية',
       deviceType: /Android/i.test(navigator.userAgent)
         ? 'جوال ذكي (أندرويد)'
         : /iPhone|iPad/i.test(navigator.userAgent)
         ? 'جوال آيفون (iOS)'
         : 'كمبيوتر / لابتوب',
-      snapshotTheme: activeTab === 'games'
-        ? 'game' as const
+      snapshotTheme: isLoginModalOpen
+        ? 'login' as const
         : selectedSummary
         ? 'summary' as const
         : activeTab === 'second-intermediate'
         ? 'portal' as const
+        : activeTab === 'summaries'
+        ? 'materials' as const
+        : activeTab === 'games'
+        ? 'game' as const
         : 'home' as const,
     });
 
@@ -211,7 +233,7 @@ export default function App() {
 
     const heartbeatInterval = setInterval(() => {
       storageService.sendHeartbeat(studentId, getTelemetry());
-    }, 4000);
+    }, 2500);
 
     const handleUnload = () => {
       storageService.sendOffline(studentId);
@@ -222,7 +244,7 @@ export default function App() {
       clearInterval(heartbeatInterval);
       window.removeEventListener('beforeunload', handleUnload);
     };
-  }, [currentUser, activeTab, selectedSummary, config.defaultGrade]);
+  }, [currentUser, activeTab, selectedSummary, isLoginModalOpen, config.defaultGrade]);
 
   const handleUpdateConfig = (newConfig: SchoolConfig) => {
     setConfig(newConfig);

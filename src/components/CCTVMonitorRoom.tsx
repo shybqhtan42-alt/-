@@ -37,6 +37,32 @@ import {
 import { Student, StudentLiveSession, StudentSuspension, StudentActivityLog, SchoolConfig } from '../types';
 import { storageService } from '../services/storageService';
 
+export const formatArabicDayAndTime = (timestamp?: number): { full: string; dayOnly: string; timeOnly: string } => {
+  const targetDate = timestamp ? new Date(timestamp) : new Date();
+  const now = new Date();
+  const isToday = targetDate.toDateString() === now.toDateString();
+  const dayName = targetDate.toLocaleDateString('ar-SA', { weekday: 'long' });
+  const fullDate = targetDate.toLocaleDateString('ar-SA', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  const timeOnly = targetDate.toLocaleTimeString('ar-SA', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  });
+
+  const dayLabel = isToday ? `اليوم (${dayName})` : `${dayName} (${fullDate})`;
+
+  return {
+    full: `${dayLabel} • الساعة: ${timeOnly}`,
+    dayOnly: dayLabel,
+    timeOnly: `الساعة: ${timeOnly}`,
+  };
+};
+
 interface StudentScreenVideoPlayerProps {
   cam: any;
   config: SchoolConfig;
@@ -52,13 +78,26 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
   scanlines,
   nightVision,
 }) => {
-  // Video playback scenes:
-  // 0: الرئيسية (Main page with green button "دخول ملخصات ثاني متوسط")
-  // 1: بوابة ثاني متوسط (Portal banner, grade pills, "تسجيل الدخول للمنصة")
-  // 2: نافذة دخول الطالب (Student Login Modal popup with credentials & code, matching user video 00:04)
-  // 3: المواد الدراسية والصفوف (Grade switch & subjects grid, matching user video 00:08)
-  // 4: ورقة العمل وملخص المادة (Worksheet with Al-Basheer logo)
-  const [scene, setScene] = useState<number>(0);
+  // Map student's real-time telemetry to the real matching scene:
+  // 0: الرئيسية (الصفحة الرئيسية مع ملخصات معتمدة لثاني متوسط)
+  // 1: بوابة ثاني متوسط (بوابة ملخصات ثاني متوسط والمقررات)
+  // 2: نافذة دخول الطالب (Student Login Modal)
+  // 3: قسم المواد والمقررات الدراسية (Subjects Grid with Science, Math, etc.)
+  // 4: ورقة العمل وملخص المادة (Worksheet Preview with clean content & logo)
+  // 5: قسم الألعاب (لعبة دورية أمن الطرق التعليمية)
+  const getRealSceneFromTelemetry = (): number => {
+    const theme = cam.snapshotTheme;
+    const sec = (cam.currentSection || '').toLowerCase();
+    if (theme === 'login' || sec.includes('نافذة') || sec.includes('دخول الطالب')) return 2;
+    if (theme === 'materials' || sec.includes('قسم المواد') || sec.includes('المقررات') || sec.includes('المواد')) return 3;
+    if (theme === 'portal' || sec.includes('بوابة')) return 1;
+    if (theme === 'summary' || sec.includes('ورقة') || sec.includes('معاينة') || sec.includes('ملخص')) return 4;
+    if (theme === 'game' || sec.includes('ألعاب') || sec.includes('لعبة')) return 5;
+    return 0; // Default: الصفحة الرئيسية (Home Page)
+  };
+
+  const [manualScene, setManualScene] = useState<number | null>(null);
+  const activeScene = manualScene !== null ? manualScene : getRealSceneFromTelemetry();
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [timecode, setTimecode] = useState<number>(0);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number; isClicking: boolean }>({
@@ -67,35 +106,35 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
     isClicking: false,
   });
 
-  // Cycle scenes to simulate real screen recording video
+  // Timecode increments for live video recording effect without fake scene cycling
   useEffect(() => {
     if (!isPlaying || !cam.isLive || cam.isSuspended) return;
     const interval = setInterval(() => {
       setTimecode((t) => t + 1);
-      setScene((s) => (s + 1) % 5);
-    }, 4200);
+    }, 1000);
     return () => clearInterval(interval);
   }, [isPlaying, cam.isLive, cam.isSuspended]);
 
-  // Cursor gliding simulation per scene
+  // Cursor gliding simulation reflecting active screen interaction
   useEffect(() => {
     if (!cam.isLive || cam.isSuspended) return;
     const sceneTargets = [
       { x: 50, y: 72 }, // Scene 0: On button "دخول ملخصات ثاني متوسط"
       { x: 50, y: 38 }, // Scene 1: On button "تسجيل الدخول للمنصة"
       { x: 50, y: 84 }, // Scene 2: On modal submit button "دخول الطالب إلى المنصة"
-      { x: 65, y: 56 }, // Scene 3: On "العلوم" / "أول متوسط"
+      { x: 65, y: 56 }, // Scene 3: On "العلوم" / "ثاني متوسط"
       { x: 50, y: 88 }, // Scene 4: On download worksheet button
+      { x: 50, y: 50 }, // Scene 5: On game radar
     ];
-    const target = sceneTargets[scene] || { x: 50, y: 50 };
+    const target = sceneTargets[activeScene] || { x: 50, y: 50 };
     setCursorPos({ x: target.x, y: target.y, isClicking: false });
 
     const clickTimer = setTimeout(() => {
       setCursorPos({ x: target.x, y: target.y, isClicking: true });
-    }, 1900);
+    }, 2000);
 
     return () => clearTimeout(clickTimer);
-  }, [scene, cam.isLive, cam.isSuspended]);
+  }, [activeScene, cam.isLive, cam.isSuspended]);
 
   if (cam.isSuspended) {
     return (
@@ -123,7 +162,12 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
           <User className="w-6 h-6" />
         </div>
         <div className="text-xs font-bold text-slate-300">الطالب خارج المنصة حالياً</div>
-        <p className="text-[10px] text-slate-500">آخر تسجيل وتواجد: {cam.lastSeen}</p>
+        <div className="text-[11px] font-bold text-amber-400 bg-amber-950/70 border border-amber-800/80 px-3 py-1 rounded-full">
+          🕒 آخر ظهور: {cam.lastSeenDayTime}
+        </div>
+        <p className="text-[10px] text-slate-500">
+          آخر صفحة كان فيها: {cam.currentSection || 'الصفحة الرئيسية'}
+        </p>
         <div className="text-[9px] font-mono text-slate-500 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
           STANDBY • CAMERA IDLE
         </div>
@@ -132,25 +176,26 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
   }
 
   const sceneTitles = [
-    'الصفحة الرئيسية: استعراض الملخصات والمدخل',
-    'بوابة ثاني متوسط: اختيار الصف والمقررات',
+    'الصفحة الرئيسية: ملخصات معتمدة لثاني متوسط فقط',
+    'بوابة ثاني متوسط: اختيار المقررات الدراسية',
     'نافذة دخول الطالب: إدخال الرمز المعتمد',
-    'استعراض المواد: تصفح أوراق العمل',
-    'معاينة ورقة العمل مع شعار البشير التعليمي',
+    'قسم المواد: استعراض المقررات وأوراق العمل',
+    'معاينة ورقة العمل مع شعار منصة البشير التعليمية',
+    'قسم الألعاب: دورية أمن الطرق التعليمية',
   ];
 
   return (
     <div className="w-full h-full rounded-xl bg-slate-950 border border-slate-700 overflow-hidden flex flex-col relative select-none">
       {/* Top Camera Status & REC Banner */}
       <div className="h-6 bg-slate-900/90 border-b border-slate-800 px-2 flex items-center justify-between text-[9px] font-mono text-slate-300 z-20">
-        <div className="flex items-center gap-1.5 text-red-400 font-bold">
+        <div className="flex items-center gap-1.5 text-red-400 font-bold shrink-0">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-          <span>🔴 REC LIVE FEED</span>
+          <span>🔴 REC LIVE</span>
         </div>
-        <div className="text-emerald-400 font-bold truncate max-w-[170px]">
-          {sceneTitles[scene]}
+        <div className="text-emerald-400 font-bold truncate max-w-[210px] text-center">
+          {manualScene !== null ? `معاينة: ${sceneTitles[activeScene]}` : `شاشة الطالب الحقيقية: ${cam.currentSection || sceneTitles[activeScene]}`}
         </div>
-        <div className="flex items-center gap-1.5 text-slate-400">
+        <div className="flex items-center gap-1 text-slate-400 font-mono shrink-0">
           <span>00:{String(timecode % 60).padStart(2, '0')}</span>
           <button
             type="button"
@@ -165,36 +210,39 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
 
       {/* Screen Video Container matching user video Screen_Recording_________________Chrome_c425aaa3.mp4 */}
       <div className="flex-1 bg-slate-900 relative overflow-hidden flex flex-col justify-between">
-        {/* Animated Simulated Student Screen View */}
-        {scene === 0 && (
-          /* SCENE 0: Home Page (الرئيسية) */
+        {/* Real Student Screen View based on real telemetry */}
+        {activeScene === 0 && (
+          /* SCENE 0: Real Home Page (الصفحة الرئيسية) */
           <div className="w-full h-full bg-gradient-to-b from-slate-100 to-slate-200 p-2 flex flex-col justify-between text-slate-800 text-right overflow-hidden">
             {/* Top Navbar */}
             <div className="bg-white rounded-lg p-1.5 shadow-xs border border-slate-200 flex items-center justify-between text-[8px] font-bold">
-              <span className="text-emerald-800 font-black">{config.platformTitle}</span>
+              <span className="text-emerald-800 font-black">{config.platformTitle || 'منصة البشير التعليمي'}</span>
               <div className="flex items-center gap-1">
                 <span className="bg-emerald-600 text-white px-2 py-0.5 rounded">الرئيسية</span>
                 <span className="text-slate-600 px-1.5 py-0.5">ثاني متوسط</span>
-                <span className="text-slate-600 px-1.5 py-0.5">الملخصات</span>
+                <span className="text-slate-600 px-1.5 py-0.5">المواد</span>
               </div>
             </div>
 
             {/* White Hero Card */}
             <div className="bg-white rounded-xl p-2.5 shadow-md border border-slate-200 space-y-1.5 my-auto text-center">
               <span className="inline-block bg-emerald-100 text-emerald-800 text-[8px] font-bold px-2 py-0.5 rounded-full">
-                {config.schoolName}
+                {config.schoolName || 'مدرسة عبد الملك بن مروان'}
               </span>
-              <div className="text-xs font-black text-emerald-900">{config.platformTitle}</div>
-              <div className="text-[8px] text-slate-500 font-bold">إعداد وتطوير: {config.authorName}</div>
+              <div className="text-xs font-black text-emerald-900">{config.platformTitle || 'منصة البشير التعليمي'}</div>
+              <div className="text-[8.5px] font-black text-emerald-700 bg-emerald-50 py-0.5 px-2 rounded-md inline-block border border-emerald-200">
+                ملخصات معتمدة لثاني متوسط فقط
+              </div>
+              <div className="text-[8px] text-slate-500 font-bold">إعداد وتطوير: {config.authorName || 'أ. صهيب القحطاني'}</div>
               <p className="text-[7px] text-slate-600 leading-relaxed max-w-xs mx-auto">
-                البيئة المعتمدة لطلاب المدرسة لتصفح الملخصات وأوراق العمل المعتمدة.
+                البيئة المعتمدة لطلاب المدرسة لتصفح الملخصات وأوراق العمل المعتمدة لثاني متوسط فقط.
               </p>
 
               {/* Action Buttons */}
               <div className="space-y-1 pt-1">
                 <div
                   className={`w-full py-1 px-2 rounded-lg text-[8px] font-black flex items-center justify-center gap-1 transition ${
-                    cursorPos.isClicking && scene === 0
+                    cursorPos.isClicking && activeScene === 0
                       ? 'bg-emerald-800 text-white scale-98 shadow-inner ring-2 ring-emerald-400'
                       : 'bg-emerald-600 text-white shadow-xs'
                   }`}
@@ -210,25 +258,25 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
 
             {/* Feature tags */}
             <div className="bg-white/80 rounded-lg p-1 text-[7px] font-bold text-slate-600 flex items-center justify-around">
-              <span>✓ ملخصات معتمدة</span>
+              <span>✓ ملخصات معتمدة لثاني متوسط فقط</span>
               <span>✓ رمز مشفر</span>
-              <span>✓ إشراف صهيب القحطاني</span>
+              <span>✓ متابعة حية</span>
             </div>
           </div>
         )}
 
-        {scene === 1 && (
+        {activeScene === 1 && (
           /* SCENE 1: Second-Intermediate Portal (بوابة ثاني متوسط) */
           <div className="w-full h-full bg-slate-100 p-2 flex flex-col justify-between text-slate-800 text-right overflow-hidden">
             {/* Top Green Banner */}
             <div className="bg-emerald-900 text-white rounded-xl p-2 space-y-1 shadow-sm">
               <div className="text-[8px] text-emerald-300 font-bold">
-                {config.schoolName} • إشراف: {config.authorName}
+                {config.schoolName || 'مدرسة عبد الملك بن مروان'} • إشراف: {config.authorName || 'أ. صهيب القحطاني'}
               </div>
               <div className="text-[11px] font-black">منصة البشير التعليمي - ثاني متوسط</div>
               <div
                 className={`py-1 px-2 bg-white text-emerald-900 rounded-lg text-[8px] font-black text-center shadow-xs transition ${
-                  cursorPos.isClicking && scene === 1
+                  cursorPos.isClicking && activeScene === 1
                     ? 'scale-95 bg-emerald-100 ring-2 ring-emerald-500'
                     : ''
                 }`}
@@ -237,16 +285,13 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
               </div>
             </div>
 
-            {/* Grade Pills Selector */}
+            {/* Grade Selector */}
             <div className="bg-white p-1.5 rounded-xl border border-slate-200 space-y-1">
-              <div className="text-[8px] font-bold text-slate-500">تصفح حسب الصف الدراسي:</div>
+              <div className="text-[8px] font-bold text-slate-500">الصف الدراسي المعتمد:</div>
               <div className="flex items-center justify-center gap-1">
-                <span className="text-[7px] px-1.5 py-0.5 bg-slate-100 rounded text-slate-600">سادس</span>
-                <span className="text-[7px] px-1.5 py-0.5 bg-slate-100 rounded text-slate-600">أول متوسط</span>
-                <span className="text-[7px] px-1.5 py-0.5 bg-emerald-600 text-white font-black rounded shadow-xs">
-                  ثاني متوسط ✓
+                <span className="text-[7px] px-2 py-0.5 bg-emerald-600 text-white font-black rounded shadow-xs">
+                  ثاني متوسط (معتمد فقط) ✓
                 </span>
-                <span className="text-[7px] px-1.5 py-0.5 bg-slate-100 rounded text-slate-600">ثالث متوسط</span>
               </div>
             </div>
 
@@ -258,13 +303,13 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
           </div>
         )}
 
-        {scene === 2 && (
-          /* SCENE 2: Student Login Modal (نافذة دخول الطالب المعتمد) matching user video 00:04 */
+        {activeScene === 2 && (
+          /* SCENE 2: Student Login Modal (نافذة دخول الطالب المعتمد) */
           <div className="w-full h-full bg-slate-900/90 relative p-2 flex items-center justify-center text-right overflow-hidden">
             {/* Modal Dialog Card */}
             <div className="w-full max-w-[240px] bg-white rounded-xl shadow-2xl border border-slate-200 p-2.5 space-y-1.5">
               <div className="flex items-center justify-between border-b border-slate-100 pb-1">
-                <span className="text-[9px] font-black text-emerald-900">{config.platformTitle}</span>
+                <span className="text-[9px] font-black text-emerald-900">{config.platformTitle || 'منصة البشير التعليمي'}</span>
                 <span className="text-[7px] text-slate-400">دخول الطالب</span>
               </div>
 
@@ -298,7 +343,7 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
               {/* Submit button */}
               <div
                 className={`py-1 rounded-lg text-[8px] font-black text-white text-center transition ${
-                  cursorPos.isClicking && scene === 2
+                  cursorPos.isClicking && activeScene === 2
                     ? 'bg-emerald-800 scale-98 shadow-inner ring-2 ring-emerald-400'
                     : 'bg-emerald-600 shadow-xs'
                 }`}
@@ -309,27 +354,26 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
           </div>
         )}
 
-        {scene === 3 && (
-          /* SCENE 3: Subjects & Grade Switching (video 00:08) */
+        {activeScene === 3 && (
+          /* SCENE 3: Subjects Section (قسم المواد الحقيقي في الموقع لثاني متوسط) */
           <div className="w-full h-full bg-slate-100 p-2 flex flex-col justify-between text-slate-800 text-right overflow-hidden">
-            {/* Top Grade Filter Tabs */}
+            {/* Top Header */}
             <div className="bg-white p-1.5 rounded-xl border border-slate-200 flex items-center justify-between text-[8px] font-bold">
-              <span className="text-emerald-800 font-black">المقررات الدراسية</span>
-              <div className="flex items-center gap-1">
-                <span className="bg-emerald-700 text-white px-2 py-0.5 rounded shadow-xs">
-                  أول متوسط
-                </span>
-                <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">ثاني متوسط</span>
-              </div>
+              <span className="text-emerald-800 font-black">المقررات الدراسية - ثاني متوسط</span>
+              <span className="bg-emerald-700 text-white px-2 py-0.5 rounded shadow-xs text-[7px]">
+                معتمدة لثاني متوسط
+              </span>
             </div>
 
-            {/* Subjects Grid */}
+            {/* Real Platform Subjects Grid */}
             <div className="grid grid-cols-2 gap-1.5 my-auto">
               {[
-                { name: 'العلوم', desc: 'ورقة الطاقة والمادة', active: true },
-                { name: 'الرياضيات', desc: 'الجبر والمعادلات', active: false },
-                { name: 'لغتي الخالدة', desc: 'الفاعل والمفعول به', active: false },
-                { name: 'الاجتماعيات', desc: 'الوحدات والتاريخ', active: false },
+                { name: 'العلوم', desc: 'الطاقة وتحولاتها (ورقة معتمدة)', active: cam.currentSubject === 'العلوم' || true },
+                { name: 'الرياضيات', desc: 'الجبر والمعادلات الخطية', active: cam.currentSubject === 'الرياضيات' },
+                { name: 'لغتي الخالدة', desc: 'الفاعل والمفعول به والقواعد', active: cam.currentSubject === 'لغتي الخالدة' },
+                { name: 'الدراسات الإسلامية', desc: 'التوحيد والحديث والفقه', active: cam.currentSubject === 'الدراسات الإسلامية' },
+                { name: 'الاجتماعيات', desc: 'تاريخ المملكة والوطن', active: cam.currentSubject === 'الاجتماعيات' },
+                { name: 'اللغة الإنجليزية', desc: 'English Super Goal 2', active: cam.currentSubject === 'اللغة الإنجليزية' },
               ].map((sub, i) => (
                 <div
                   key={i}
@@ -339,26 +383,29 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
                       : 'bg-white border-slate-200'
                   }`}
                 >
-                  <div className="text-[8px] font-black text-emerald-900">{sub.name}</div>
-                  <div className="text-[6.5px] text-slate-500">{sub.desc}</div>
+                  <div className="text-[8px] font-black text-emerald-900 flex items-center justify-between">
+                    <span>{sub.name}</span>
+                    {sub.active && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>}
+                  </div>
+                  <div className="text-[6.5px] text-slate-500 truncate">{sub.desc}</div>
                 </div>
               ))}
             </div>
 
             <div className="bg-emerald-900 text-white rounded-lg p-1 text-[7px] font-bold text-center">
-              تم اختيار مادة العلوم • جاهز للتصفح والتحميل
+              قسم المواد والملخصات المعتمدة • {config.schoolName || 'مدرسة عبد الملك بن مروان'}
             </div>
           </div>
         )}
 
-        {scene === 4 && (
+        {activeScene === 4 && (
           /* SCENE 4: Worksheet Document with Al-Basheer Logo (No stamps on sheet!) */
           <div className="w-full h-full bg-white p-2 flex flex-col justify-between text-slate-800 text-right overflow-hidden">
             {/* Document Header Banner */}
             <div className="bg-emerald-900 text-white p-1.5 rounded-lg flex items-center justify-between text-[7px]">
               <div>
-                <div className="font-black text-[8px]">{config.platformTitle}</div>
-                <div className="text-emerald-200">{config.schoolName}</div>
+                <div className="font-black text-[8px]">{config.schoolName || 'مدرسة عبد الملك بن مروان'} • {config.platformTitle || 'منصة البشير التعليمية'}</div>
+                <div className="text-emerald-200">ورقة عمل وملخص دراسي معتمد: الطاقة وتحولاتها • ثاني متوسط - العلوم</div>
               </div>
               <div className="bg-emerald-800 px-1.5 py-0.5 rounded text-[7px] font-bold">
                 ملخص دراسي رسمي
@@ -369,18 +416,19 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
             <div className="bg-amber-50/70 border border-amber-300 rounded-lg p-1.5 flex items-center justify-between gap-1 text-[7px]">
               <div className="space-y-0.5">
                 <div>اسم الطالب: <strong className="text-emerald-900 font-black">{cam.studentName}</strong></div>
-                <div>المدرسة: <strong>{config.schoolName}</strong></div>
-                <div>المعلم: <strong>أ. صهيب القحطاني</strong></div>
+                <div>المدرسة: <strong>{config.schoolName || 'مدرسة عبد الملك بن مروان'}</strong></div>
+                <div>المعلم المشرف: <strong>عبد الصمد خان</strong> • الصف: <strong>ثاني متوسط</strong> • المادة: <strong>العلوم</strong></div>
               </div>
               <div className="bg-emerald-900 text-white px-2 py-1 rounded text-center shrink-0 border border-amber-400">
                 <div className="text-[6px] text-amber-300 font-bold">شعار المنصة</div>
-                <div className="text-[7px] font-black">البشير التعليمي</div>
+                <div className="text-[7px] font-black">منصة البشير التعليمية</div>
               </div>
             </div>
 
             {/* Clean Worksheet Preview (No stamp over the content) */}
             <div className="bg-slate-50 border border-slate-200 rounded p-1.5 space-y-1 text-center my-auto">
               <div className="text-[8px] font-black text-slate-800">ورقة عمل مادة العلوم: الطاقة وتحولاتها</div>
+              <div className="text-[6.5px] text-slate-500">نشاطات تمهيدية • أشكال الطاقة ومصادرها</div>
               <div className="h-1.5 bg-slate-200 rounded w-3/4 mx-auto"></div>
               <div className="h-1.5 bg-slate-100 rounded w-full mx-auto"></div>
             </div>
@@ -388,12 +436,32 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
             {/* Download Button */}
             <div
               className={`py-1 rounded-lg text-[7px] font-black text-white text-center transition ${
-                cursorPos.isClicking && scene === 4
+                cursorPos.isClicking && activeScene === 4
                   ? 'bg-emerald-800 scale-98 shadow-inner ring-2 ring-emerald-400'
                   : 'bg-emerald-600 shadow-xs'
               }`}
             >
               📥 تنزيل ورقة العمل الموثقة
+            </div>
+          </div>
+        )}
+
+        {activeScene === 5 && (
+          /* SCENE 5: Educational Game Checkpoint (دورية أمن الطرق) */
+          <div className="w-full h-full bg-slate-900 p-2 flex flex-col justify-between text-white text-right overflow-hidden">
+            <div className="bg-slate-800 p-1.5 rounded-lg flex items-center justify-between text-[8px]">
+              <span className="text-amber-400 font-black">🚔 لعبة دورية أمن الطرق التعليمية</span>
+              <span className="text-slate-300 text-[7px]">محطة الفحص المدرسي</span>
+            </div>
+            <div className="bg-slate-950 border border-amber-500/40 rounded-xl p-2.5 text-center my-auto space-y-1">
+              <div className="text-[9px] font-black text-amber-300">نقطة تفتيش دورية أمن الطرق</div>
+              <div className="text-[7.5px] text-slate-400">فحص رخصة القيادة والأسئلة التعليمية لثاني متوسط</div>
+              <div className="inline-block px-2 py-0.5 bg-emerald-900/80 text-emerald-300 text-[7px] rounded-full border border-emerald-600">
+                الطالب يجيب على الأسئلة في المحطة
+              </div>
+            </div>
+            <div className="text-center text-[7px] text-slate-400">
+              قسم الألعاب التعليمية الهادفة • {config.schoolName || 'مدرسة عبد الملك بن مروان'}
             </div>
           </div>
         )}
@@ -421,16 +489,33 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
         </div>
 
         {/* Bottom Scene Shortcuts / Manual Jump Controls */}
-        <div className="h-6 bg-slate-950/95 border-t border-slate-800 px-1 flex items-center justify-between text-[7px] font-bold text-slate-400 z-20">
-          <span className="text-slate-500 hidden sm:inline">مشاهد الفيديو:</span>
+        <div className="h-6 bg-slate-950/95 border-t border-slate-800 px-1.5 flex items-center justify-between text-[7px] font-bold text-slate-400 z-20">
+          <div className="flex items-center gap-1">
+            {manualScene !== null ? (
+              <button
+                type="button"
+                onClick={() => setManualScene(null)}
+                className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-black flex items-center gap-1 animate-pulse cursor-pointer shadow-xs"
+                title="العودة لمتابعة شاشة الطالب الفعلية في الوقت الحقيقي"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
+                <span>العودة للبث الحي لشاشة الطالب</span>
+              </button>
+            ) : (
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>مباشر من شاشة الطالب الحالية</span>
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-0.5">
-            {['1: الرئيسية', '2: البوابة', '3: الدخول', '4: المواد', '5: الورقة'].map((label, idx) => (
+            {['1: الرئيسية', '2: البوابة', '3: الدخول', '4: المواد', '5: الورقة', '6: الألعاب'].map((label, idx) => (
               <button
                 key={idx}
                 type="button"
-                onClick={() => setScene(idx)}
+                onClick={() => setManualScene(idx)}
                 className={`px-1.5 py-0.5 rounded transition cursor-pointer ${
-                  scene === idx
+                  activeScene === idx
                     ? 'bg-emerald-600 text-white font-black'
                     : 'bg-slate-900 hover:bg-slate-800 text-slate-300'
                 }`}
@@ -441,9 +526,9 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => setScene(0)}
+            onClick={() => setManualScene(null)}
             className="text-slate-400 hover:text-white transition cursor-pointer p-0.5"
-            title="إعادة بدء المشهد الأول"
+            title="إعادة ضبط للبث المباشر لشاشة الطالب"
           >
             <RotateCcw className="w-2.5 h-2.5" />
           </button>
@@ -635,7 +720,9 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
       activeSuspension && (activeSuspension.expiresAt === 0 || Date.now() < activeSuspension.expiresAt)
     );
 
-    const theme = activeSession?.snapshotTheme || (isLive ? 'portal' : 'home');
+    const theme = activeSession?.snapshotTheme || 'home';
+    const lastSeenTs = activeSession?.lastSeen || st.lastSeenTimestamp || Date.now();
+    const dateInfo = formatArabicDayAndTime(lastSeenTs);
 
     return {
       camCode,
@@ -645,11 +732,14 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
       isLive,
       isSuspended,
       suspension: activeSuspension,
-      currentSection: activeSession?.currentSection || (isLive ? 'بوابة ملخصات ثاني متوسط' : 'خارج المنصة حالياً'),
-      currentSubject: activeSession?.currentSubject || (isLive ? 'العلوم' : 'غير متصل'),
-      currentAction: activeSession?.currentAction || (isLive ? 'يتصفح الملخصات المعتمدة' : 'غادر المنصة للتو'),
+      currentSection: activeSession?.currentSection || (isLive ? 'الصفحة الرئيسية' : 'خارج المنصة حالياً'),
+      currentSubject: activeSession?.currentSubject || (isLive ? 'عام' : 'غير متصل'),
+      currentAction: activeSession?.currentAction || (isLive ? 'يتصفح الصفحة الرئيسية' : 'غادر المنصة للتو'),
       deviceType: activeSession?.deviceType || 'هاتف ذكي (أندرويد)',
-      lastSeen: activeSession ? new Date(activeSession.lastSeen).toLocaleTimeString('ar-SA') : 'منذ قليل',
+      lastSeen: new Date(lastSeenTs).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }),
+      lastSeenDayTime: dateInfo.full,
+      lastSeenDay: dateInfo.dayOnly,
+      lastSeenTime: dateInfo.timeOnly,
       pingMs: isLive ? 22 : 0,
       avatarColor:
         idx % 3 === 0
@@ -673,6 +763,7 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
     const isSuspended = Boolean(
       activeSuspension && (activeSuspension.expiresAt === 0 || Date.now() < activeSuspension.expiresAt)
     );
+    const dateInfo = formatArabicDayAndTime(gs.lastSeen);
 
     return {
       camCode,
@@ -682,11 +773,14 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
       isLive,
       isSuspended,
       suspension: activeSuspension,
-      currentSection: gs.currentSection || 'تصفح المنصة',
+      currentSection: gs.currentSection || (isLive ? 'الصفحة الرئيسية' : 'خارج المنصة حالياً'),
       currentSubject: gs.currentSubject || 'عام',
-      currentAction: gs.currentAction || 'اطلاع على الملخصات',
+      currentAction: gs.currentAction || (isLive ? 'يتصفح الصفحة الرئيسية' : 'غادر المنصة للتو'),
       deviceType: gs.deviceType || 'متصفح الجوال',
-      lastSeen: new Date(gs.lastSeen).toLocaleTimeString('ar-SA'),
+      lastSeen: new Date(gs.lastSeen).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }),
+      lastSeenDayTime: dateInfo.full,
+      lastSeenDay: dateInfo.dayOnly,
+      lastSeenTime: dateInfo.timeOnly,
       pingMs: 30,
       avatarColor: 'from-purple-600 to-slate-800',
       snapshotTheme: gs.snapshotTheme || 'home',
@@ -847,11 +941,11 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
                   ) : cam.isLive ? (
                     <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                      داخل المنصة (LIVE)
+                      متصل الآن • {cam.lastSeenTime}
                     </span>
                   ) : (
-                    <span className="text-[11px] font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded">
-                      غادر المنصة
+                    <span className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
+                      آخر ظهور: {cam.lastSeenTime}
                     </span>
                   )}
 
@@ -909,8 +1003,24 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
                 {/* Telemetry info bar */}
                 <div className="p-3 bg-slate-900 border-t border-slate-800 space-y-2 text-xs">
                   <div className="flex items-center justify-between text-[11px] text-slate-300">
-                    <span className="font-semibold text-slate-400">النشاط الحالي:</span>
-                    <span className="font-bold text-emerald-400 truncate max-w-[200px]">{cam.currentAction}</span>
+                    <span className="font-semibold text-slate-400">الصفحة والمكان الفعلي:</span>
+                    <span className="font-bold text-emerald-400 truncate max-w-[210px]">{cam.currentSection}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-300">
+                    <span className="font-semibold text-slate-400">النشاط المرصود:</span>
+                    <span className="font-bold text-amber-300 truncate max-w-[210px]">{cam.currentAction}</span>
+                  </div>
+
+                  {/* Explicit Last Seen Day & Hour/Minute/Second */}
+                  <div className="bg-slate-950/90 border border-slate-800/90 rounded-lg p-1.5 flex items-center justify-between text-[10.5px]">
+                    <span className="text-slate-400 font-bold flex items-center gap-1 shrink-0">
+                      <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>آخر ظهور للطالب:</span>
+                    </span>
+                    <span className="font-mono font-bold text-emerald-300" dir="rtl">
+                      {cam.lastSeenDayTime}
+                    </span>
                   </div>
 
                   <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
@@ -918,7 +1028,7 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
                       <Smartphone className="w-3 h-3 text-slate-500 shrink-0" />
                       <span className="truncate">{cam.deviceType}</span>
                     </span>
-                    <span className="text-slate-400">تحديث: {cam.lastSeen}</span>
+                    <span className="text-slate-400">{cam.isLive ? '🟢 متصل مباشرة' : '⚪ خارج المنصة'}</span>
                   </div>
 
                   {/* Operational Action Buttons: Download Logs & Kick / Unkick */}

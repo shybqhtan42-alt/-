@@ -6,6 +6,8 @@ export interface Student {
   grade: string;
   registeredAt: string;
   notes?: string;
+  lastSeenTimestamp?: number;
+  lastSeenFormatted?: string;
 }
 
 export interface SummaryItem {
@@ -67,7 +69,8 @@ export interface StudentLiveSession {
   isSuspended?: boolean;
   suspensionExpiresAt?: number;
   suspensionReason?: string;
-  snapshotTheme?: 'home' | 'portal' | 'summary' | 'game' | 'login' | 'download';
+  snapshotTheme?: 'home' | 'portal' | 'summary' | 'game' | 'login' | 'download' | 'materials';
+  lastSeenFormatted?: string;
   activityCount?: number;
   recentActivities?: StudentActivityLog[];
 }

@@ -469,11 +469,12 @@ async function startServer() {
     currentAction?: string;
     deviceType?: string;
     lastSeen: number;
+    lastSeenFormatted?: string;
     cameraCode?: string;
     isSuspended?: boolean;
     suspensionExpiresAt?: number;
     suspensionReason?: string;
-    snapshotTheme?: 'home' | 'portal' | 'summary' | 'game' | 'login' | 'download';
+    snapshotTheme?: 'home' | 'portal' | 'summary' | 'game' | 'login' | 'download' | 'materials';
     activityCount?: number;
     recentActivities?: StudentActivityLog[];
   }
@@ -568,6 +569,29 @@ async function startServer() {
         .slice(-8)
         .reverse();
 
+      const now = Date.now();
+      const lastSeenFormatted = new Date(now).toLocaleString('ar-SA', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+      });
+
+      // Update student persistent lastSeen if registered
+      if (Array.isArray(db.students)) {
+        const sIdx = db.students.findIndex(
+          (s) => s.id === studentId || (studentName && s.fullName.toLowerCase() === studentName.toLowerCase())
+        );
+        if (sIdx !== -1) {
+          db.students[sIdx].lastSeenTimestamp = now;
+          db.students[sIdx].lastSeenFormatted = lastSeenFormatted;
+        }
+      }
+
       liveSessionsMap.set(studentId, {
         studentId,
         studentName: studentName || existing?.studentName || 'طالب متصل',
@@ -576,7 +600,8 @@ async function startServer() {
         currentSubject: currentSubject || existing?.currentSubject || 'عام',
         currentAction: currentAction || existing?.currentAction || 'تصفح المنصة',
         deviceType: deviceType || existing?.deviceType || 'جوال (Android/iOS)',
-        lastSeen: Date.now(),
+        lastSeen: now,
+        lastSeenFormatted,
         cameraCode,
         isSuspended,
         suspensionExpiresAt,
