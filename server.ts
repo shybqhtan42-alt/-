@@ -552,7 +552,7 @@ async function startServer() {
           section: currentSection || existing.currentSection || 'الصفحة الرئيسية',
           subject: currentSubject || existing.currentSubject,
           timestamp: Date.now(),
-          timeFormatted: new Date().toLocaleTimeString('ar-SA'),
+          timeFormatted: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' }),
           deviceType: deviceType || existing.deviceType,
           type: currentAction.includes('تنزيل') ? 'download_file' : currentAction.includes('ملخص') ? 'view_summary' : 'navigate',
         };
@@ -568,7 +568,7 @@ async function startServer() {
           section: currentSection || 'الصفحة الرئيسية',
           subject: currentSubject,
           timestamp: Date.now(),
-          timeFormatted: new Date().toLocaleTimeString('ar-SA'),
+          timeFormatted: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' }),
           deviceType,
           type: 'enter',
         });
@@ -589,6 +589,7 @@ async function startServer() {
         minute: '2-digit',
         second: '2-digit',
         hour12: true,
+        timeZone: 'Asia/Riyadh',
       });
 
       // Update student persistent lastSeen if registered
@@ -668,7 +669,7 @@ async function startServer() {
       action: `قام المدير بإخراج الطالب مؤقتاً ${duration > 0 ? `لمدة (${duration} دقيقة)` : 'حتى يقوم المدير بفتح الموقع له يدوياً'}`,
       section: 'إجراء أمني - إخراج الطالب',
       timestamp: Date.now(),
-      timeFormatted: new Date().toLocaleTimeString('ar-SA'),
+      timeFormatted: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' }),
       type: 'kicked',
     });
 
@@ -695,7 +696,7 @@ async function startServer() {
         action: 'قام المدير بفك الحظر وإعادة فتح الموقع للطالب فوراً',
         section: 'إجراء أمني - فك الإيقاف',
         timestamp: Date.now(),
-        timeFormatted: new Date().toLocaleTimeString('ar-SA'),
+        timeFormatted: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' }),
         type: 'enter',
       });
     }
@@ -713,22 +714,36 @@ async function startServer() {
 
   // Explicit logout / offline endpoint
   app.post('/api/presence/offline', (req, res) => {
-    const { studentId } = req.body || {};
+    let rawBody = req.body;
+    if (typeof rawBody === 'string') {
+      try { rawBody = JSON.parse(rawBody); } catch (_) {}
+    }
+    const { studentId } = rawBody || {};
     if (studentId && typeof studentId === 'string') {
       const existing = liveSessionsMap.get(studentId);
-      if (existing) {
-        studentActivityLogs.push({
-          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          studentId,
-          studentName: existing.studentName,
-          action: 'خرج من المنصة المدرسية (تسجيل خروج / إغلاق)',
-          section: 'الصفحة الرئيسية',
-          timestamp: Date.now(),
-          timeFormatted: new Date().toLocaleTimeString('ar-SA'),
-          type: 'exit',
-        });
-      }
+      const studentName = existing?.studentName;
+
+      studentActivityLogs.push({
+        id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        studentId,
+        studentName: studentName || 'طالب',
+        action: 'خرج من المنصة المدرسية',
+        section: 'الصفحة الرئيسية',
+        timestamp: Date.now(),
+        timeFormatted: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' }),
+        type: 'exit',
+      });
+
       liveSessionsMap.delete(studentId);
+
+      // Clean up any other device keys with the same student name
+      if (studentName) {
+        for (const [sKey, sVal] of liveSessionsMap.entries()) {
+          if (sVal.studentName && sVal.studentName.trim().toLowerCase() === studentName.trim().toLowerCase()) {
+            liveSessionsMap.delete(sKey);
+          }
+        }
+      }
     }
     res.json({ success: true });
   });
@@ -736,7 +751,7 @@ async function startServer() {
   // Dedicated CCTV live camera feeds endpoint
   app.get('/api/presence/cameras', (req, res) => {
     const now = Date.now();
-    const activeThreshold = 25000;
+    const activeThreshold = 10000;
     const activeFeeds: LiveStudentSession[] = [];
     liveSessionsMap.forEach((session, id) => {
       // Check suspension expiry
@@ -759,20 +774,35 @@ async function startServer() {
 
   // --- API ROUTES ---
 
-  // 1. Full state sync endpoint (used by all devices to sync on load and poll every 3 seconds)
+  // 1. Full state sync endpoint (used by all devices to sync on load and poll)
   app.get('/api/sync', (req, res) => {
     const now = Date.now();
-    // Student is considered online if heartbeat was received within the last 18 seconds
-    const activeThreshold = 18000;
+    // Student is considered online if heartbeat was received within the last 10 seconds
+    const activeThreshold = 10000;
     const onlineStudentIds: string[] = [];
     const onlineSessions: LiveStudentSession[] = [];
 
     liveSessionsMap.forEach((session, id) => {
       if (now - session.lastSeen <= activeThreshold) {
         onlineStudentIds.push(id);
+        // Also map registered student ID if matched by name or ID
+        if (Array.isArray(db.students)) {
+          const matched = db.students.find(
+            (st) =>
+              st.id === id ||
+              (session.studentName &&
+                st.fullName &&
+                (st.fullName.trim().toLowerCase() === session.studentName.trim().toLowerCase() ||
+                  st.fullName.toLowerCase().includes(session.studentName.toLowerCase()) ||
+                  session.studentName.toLowerCase().includes(st.fullName.toLowerCase())))
+          );
+          if (matched && !onlineStudentIds.includes(matched.id)) {
+            onlineStudentIds.push(matched.id);
+          }
+        }
         onlineSessions.push(session);
-      } else if (now - session.lastSeen > 60000) {
-        // cleanup stale records after 1 minute
+      } else if (now - session.lastSeen > 30000) {
+        // cleanup stale records after 30 seconds
         liveSessionsMap.delete(id);
       }
     });

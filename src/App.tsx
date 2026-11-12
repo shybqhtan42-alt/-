@@ -35,8 +35,19 @@ export default function App() {
   const [config, setConfig] = useState<SchoolConfig>(() => storageService.getConfig());
   const [students, setStudents] = useState<Student[]>(() => storageService.getStudents());
   const [summaries, setSummaries] = useState<SummaryItem[]>(() => storageService.getSummaries());
-  const [currentUser, setCurrentUser] = useState<CurrentUser>({ role: 'guest' });
   const [favorites, setFavorites] = useState<string[]>(() => storageService.getFavorites());
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(() => {
+    try {
+      const saved = localStorage.getItem('al_basheer_current_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && (parsed.role === 'student' || parsed.role === 'manager')) {
+          return parsed;
+        }
+      }
+    } catch (_) {}
+    return { role: 'guest' };
+  });
   const [onlineStudentIds, setOnlineStudentIds] = useState<string[]>([]);
   const [onlineSessions, setOnlineSessions] = useState<StudentLiveSession[]>([]);
   const [suspensions, setSuspensions] = useState<StudentSuspension[]>([]);
@@ -178,8 +189,21 @@ export default function App() {
 
   // Heartbeat effect: Continuously sends live telemetry for the CCTV surveillance system
   useEffect(() => {
-    const studentId = currentUser.role === 'student' && currentUser.student?.id
-      ? currentUser.student.id
+    const savedName = localStorage.getItem('al_basheer_student_name');
+
+    // Match with registered student list
+    const matchedRegisteredStudent =
+      (currentUser.role === 'student' && currentUser.student ? currentUser.student : null) ||
+      students.find((st) => {
+        if (!savedName) return false;
+        const cleanSaved = savedName.trim().toLowerCase();
+        const cleanFull = st.fullName.trim().toLowerCase();
+        return cleanSaved === cleanFull || cleanFull.includes(cleanSaved) || cleanSaved.includes(cleanFull);
+      }) ||
+      (currentUser.role !== 'manager' && students.length > 0 ? students[0] : null);
+
+    const studentId = matchedRegisteredStudent
+      ? matchedRegisteredStudent.id
       : (() => {
           let sid = localStorage.getItem('al_basheer_client_device_id');
           if (!sid) {
@@ -189,15 +213,15 @@ export default function App() {
           return sid;
         })();
 
-    const savedName = localStorage.getItem('al_basheer_student_name');
+    const resolvedStudentName = matchedRegisteredStudent
+      ? matchedRegisteredStudent.fullName
+      : (savedName || (currentUser.role === 'manager' ? 'المدير' : 'طالب يتصفح المنصة'));
+
+    const resolvedGrade = matchedRegisteredStudent?.grade || config.defaultGrade || 'ثاني متوسط';
 
     const getTelemetry = () => ({
-      studentName: currentUser.role === 'student'
-        ? (currentUser.student?.fullName || 'طالب مسجل')
-        : (savedName || 'طالب يتصفح المنصة'),
-      grade: currentUser.role === 'student'
-        ? (currentUser.student?.grade || config.defaultGrade || 'ثاني متوسط')
-        : (config.defaultGrade || 'ثاني متوسط'),
+      studentName: resolvedStudentName,
+      grade: resolvedGrade,
       currentSection: isLoginModalOpen
         ? 'نافذة تسجيل دخول الطالب'
         : selectedSummary
@@ -246,19 +270,34 @@ export default function App() {
     storageService.sendHeartbeat(studentId, getTelemetry());
 
     const heartbeatInterval = setInterval(() => {
-      storageService.sendHeartbeat(studentId, getTelemetry());
+      if (document.visibilityState !== 'hidden') {
+        storageService.sendHeartbeat(studentId, getTelemetry());
+      }
     }, 2000);
 
-    const handleUnload = () => {
+    const handleLeave = () => {
       storageService.sendOffline(studentId);
     };
-    window.addEventListener('beforeunload', handleUnload);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        storageService.sendOffline(studentId);
+      } else {
+        storageService.sendHeartbeat(studentId, getTelemetry());
+      }
+    };
+
+    window.addEventListener('beforeunload', handleLeave);
+    window.addEventListener('pagehide', handleLeave);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       clearInterval(heartbeatInterval);
-      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('beforeunload', handleLeave);
+      window.removeEventListener('pagehide', handleLeave);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentUser, activeTab, selectedSummary, isLoginModalOpen, config.defaultGrade]);
+  }, [currentUser, activeTab, selectedSummary, isLoginModalOpen, config.defaultGrade, students]);
 
   const handleUpdateConfig = (newConfig: SchoolConfig) => {
     setConfig(newConfig);
@@ -286,7 +325,11 @@ export default function App() {
   };
 
   const handleLoginSuccess = (role: 'student' | 'manager', student?: Student) => {
-    setCurrentUser({ role, student });
+    const userObj: CurrentUser = { role, student };
+    setCurrentUser(userObj);
+    try {
+      localStorage.setItem('al_basheer_current_user', JSON.stringify(userObj));
+    } catch (_) {}
     if (role === 'student' && student?.id) {
       storageService.sendHeartbeat(student.id);
     }
@@ -301,6 +344,9 @@ export default function App() {
     if (currentUser.role === 'student' && currentUser.student?.id) {
       storageService.sendOffline(currentUser.student.id);
     }
+    try {
+      localStorage.removeItem('al_basheer_current_user');
+    } catch (_) {}
     setCurrentUser({ role: 'guest' });
     setActiveTab('home');
   };

@@ -235,7 +235,7 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
         <div className="w-12 h-12 rounded-full bg-slate-900 text-slate-500 flex items-center justify-center border border-slate-700">
           <User className="w-6 h-6" />
         </div>
-        <div className="text-xs font-bold text-slate-300">الطالب خارج المنصة حالياً</div>
+        <div className="text-xs font-bold text-slate-300">الطالب غير متاح حالياً (خارج المنصة)</div>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-2 w-full max-w-xs space-y-1 text-center">
           <div className="text-[10px] font-bold text-amber-300 flex items-center justify-center gap-1">
             <Calendar className="w-3.5 h-3.5 text-amber-400" />
@@ -249,8 +249,8 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
         <p className="text-[10px] text-slate-400">
           آخر صفحة كان فيها: <strong className="text-slate-200">{cam.currentSection || 'الصفحة الرئيسية'}</strong>
         </p>
-        <div className="text-[9px] font-mono text-slate-500 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
-          STANDBY • CAMERA IDLE
+        <div className="text-[9px] font-mono text-slate-400 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
+          ⚪ غير متاح • كاميرا الاستعداد
         </div>
       </div>
     );
@@ -912,15 +912,25 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
   // Build combined camera list: registered students mapped to cameras + guest sessions
   const registeredCameras = students.map((st: Student, idx: number) => {
     const camCode = `CAM-0${idx + 1}`;
-    // Check if this student has an active session in the last 25 seconds
-    const activeSession = onlineSessions.find(
-      (s: StudentLiveSession) => s.studentId === st.id || s.studentName.toLowerCase() === st.fullName.toLowerCase()
-    );
-    const isLive = Boolean(activeSession && Date.now() - activeSession.lastSeen < 25000);
+    // Check if this student has an active session in the last 12 seconds
+    const activeSession = onlineSessions.find((s: StudentLiveSession) => {
+      if (s.studentId === st.id) return true;
+      const sName = (s.studentName || '').trim().toLowerCase();
+      const stName = (st.fullName || '').trim().toLowerCase();
+      if (!sName || !stName) return false;
+      return sName === stName || sName.includes(stName) || stName.includes(sName);
+    });
+    const isLive = Boolean(activeSession && Date.now() - activeSession.lastSeen < 12000);
 
     // Check if student is suspended / kicked
     const activeSuspension = suspensions.find(
-      (sp: StudentSuspension) => sp.studentId === st.id || sp.studentName.toLowerCase() === st.fullName.toLowerCase()
+      (sp: StudentSuspension) =>
+        sp.studentId === st.id ||
+        (sp.studentName &&
+          st.fullName &&
+          (sp.studentName.trim().toLowerCase() === st.fullName.trim().toLowerCase() ||
+            sp.studentName.toLowerCase().includes(st.fullName.toLowerCase()) ||
+            st.fullName.toLowerCase().includes(sp.studentName.toLowerCase())))
     );
     const isSuspended = Boolean(
       activeSuspension && (activeSuspension.expiresAt === 0 || Date.now() < activeSuspension.expiresAt)
@@ -957,9 +967,15 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
     };
   });
 
-  // Guest sessions mapped to cameras
+  // Guest sessions mapped to cameras (excluding any matched to registered students)
   const guestSessions = onlineSessions.filter(
-    (s: StudentLiveSession) => !students.some((st: Student) => st.id === s.studentId || st.fullName.toLowerCase() === s.studentName.toLowerCase())
+    (s: StudentLiveSession) =>
+      !students.some((st: Student) => {
+        if (st.id === s.studentId) return true;
+        const sName = (s.studentName || '').trim().toLowerCase();
+        const stName = (st.fullName || '').trim().toLowerCase();
+        return Boolean(sName && stName && (sName === stName || sName.includes(stName) || stName.includes(sName)));
+      })
   );
 
   const guestCameras = guestSessions.map((gs: StudentLiveSession, idx: number) => {
@@ -1156,13 +1172,14 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
                       موقوف بأمر المدير
                     </span>
                   ) : cam.isLive ? (
-                    <span className="flex items-center gap-1.5 text-[10.5px] font-mono font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                      <span>متصل الآن • 📅 {cam.lastSeenDay} • 🕒 {cam.lastSeenTime}</span>
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2.5 py-0.5 rounded-full">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>متاح (متصل الآن)</span>
                     </span>
                   ) : (
-                    <span className="text-[10.5px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
-                      آخر ظهور: 📅 {cam.lastSeenDay} • 🕒 {cam.lastSeenTime}
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-slate-400 bg-slate-900 border border-slate-700 px-2.5 py-0.5 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                      <span>غير متاح (خارج المنصة)</span>
                     </span>
                   )}
 
@@ -1256,7 +1273,7 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
                       <Smartphone className="w-3 h-3 text-slate-500 shrink-0" />
                       <span className="truncate">{cam.deviceType}</span>
                     </span>
-                    <span className="text-slate-400">{cam.isLive ? '🟢 متصل مباشرة' : '⚪ خارج المنصة'}</span>
+                    <span className="text-slate-300 font-bold">{cam.isLive ? '🟢 متاح الآن' : '⚪ غير متاح'}</span>
                   </div>
 
                   {/* Operational Action Buttons: Download Logs & Kick / Unkick */}
@@ -1336,7 +1353,15 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
                 className="flex items-center justify-between p-2.5 bg-slate-950 rounded-xl border border-slate-800/80"
               >
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-emerald-400 font-bold">{log.timeFormatted}</span>
+                  <span className="font-mono text-emerald-400 font-bold">
+                    {new Date(log.timestamp || Date.now()).toLocaleTimeString('ar-SA', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                      hour12: true,
+                      timeZone: 'Asia/Riyadh',
+                    })}
+                  </span>
                   <span
                     className={`w-2 h-2 rounded-full ${
                       log.type === 'kicked'
