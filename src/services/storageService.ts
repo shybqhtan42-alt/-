@@ -604,12 +604,21 @@ export const storageService = {
     return [];
   },
 
+  notifyLocalUpdate(): void {
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('al_basheer_data_updated'));
+      }
+    } catch (_) {}
+  },
+
   saveStudents(students: Student[]): void {
     const timestamp = Date.now();
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
     this.setManagerCustomized(true);
     this.setLocalTimestamp(timestamp);
     this.backupToVault(this.getConfig(), students, this.getSummaries(), timestamp);
+    this.notifyLocalUpdate();
   },
 
   async addStudent(student: Omit<Student, 'id' | 'registeredAt'>): Promise<Student> {
@@ -726,6 +735,7 @@ export const storageService = {
     this.setManagerCustomized(true);
     this.setLocalTimestamp(timestamp);
     this.backupToVault(this.getConfig(), this.getStudents(), deduped, timestamp);
+    this.notifyLocalUpdate();
   },
 
   async addSummary(summary: Omit<SummaryItem, 'id' | 'dateAdded'>): Promise<SummaryItem> {

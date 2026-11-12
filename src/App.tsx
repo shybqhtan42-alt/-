@@ -150,24 +150,29 @@ export default function App() {
 
     doSync();
 
-    // 3. Periodic real-time background sync (every 2 seconds) so changes and presence publish live to all phones
-    const intervalId = setInterval(doSync, 2000);
+    // 3. Periodic real-time background sync (every 1.2s) so changes and presence publish live to all phones
+    const intervalId = setInterval(doSync, 1200);
 
-    // 4. Sync immediately when student switches tabs or unlocks phone or local storage updates
+    // 4. Sync immediately when manager publishes or updates, or student switches tabs or storage updates
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         doSync();
       }
     };
+    const handleDataUpdated = () => {
+      doSync();
+    };
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('focus', doSync);
     window.addEventListener('storage', doSync);
+    window.addEventListener('al_basheer_data_updated', handleDataUpdated);
 
     return () => {
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', doSync);
       window.removeEventListener('storage', doSync);
+      window.removeEventListener('al_basheer_data_updated', handleDataUpdated);
     };
   }, []);
 
@@ -187,11 +192,11 @@ export default function App() {
       currentSection: isLoginModalOpen
         ? 'نافذة تسجيل دخول الطالب'
         : selectedSummary
-        ? `معاينة ورقة: ${selectedSummary.title}`
+        ? `قسم التنزيل ومعاينة ورقة: ${selectedSummary.title}`
         : activeTab === 'second-intermediate'
         ? `بوابة ملخصات ${config.defaultGrade || 'ثاني متوسط'}`
         : activeTab === 'summaries'
-        ? 'قسم المواد والملخصات'
+        ? 'قسم المواد والمقررات'
         : activeTab === 'games'
         ? 'قسم الألعاب - لعبة دورية أمن الطرق'
         : activeTab === 'about'
@@ -203,14 +208,14 @@ export default function App() {
       currentAction: isLoginModalOpen
         ? 'يقوم بتسجيل الدخول للمنصة'
         : selectedSummary
-        ? `يطلع على ورقة: ${selectedSummary.title}`
+        ? `يستعد لتنزيل ورقة العمل والمطوية المعتمدة`
         : activeTab === 'second-intermediate'
-        ? 'يتصفح بوابة ثاني متوسط'
+        ? 'يتصفح بوابة ثاني متوسط والمقررات'
         : activeTab === 'summaries'
-        ? 'يستعرض قسم المواد والملخصات'
+        ? 'يستعرض قسم المواد والملخصات لثاني متوسط'
         : activeTab === 'games'
-        ? 'يلعب في دورية أمن الطرق'
-        : 'يتصفح الصفحة الرئيسية',
+        ? 'يلعب في دورية أمن الطرق التعليمية'
+        : 'يتصفح الصفحة الرئيسية (ملخصات معتمدة لثاني متوسط)',
       deviceType: /Android/i.test(navigator.userAgent)
         ? 'جوال ذكي (أندرويد)'
         : /iPhone|iPad/i.test(navigator.userAgent)
@@ -219,7 +224,7 @@ export default function App() {
       snapshotTheme: isLoginModalOpen
         ? 'login' as const
         : selectedSummary
-        ? 'summary' as const
+        ? 'download' as const
         : activeTab === 'second-intermediate'
         ? 'portal' as const
         : activeTab === 'summaries'
@@ -233,7 +238,7 @@ export default function App() {
 
     const heartbeatInterval = setInterval(() => {
       storageService.sendHeartbeat(studentId, getTelemetry());
-    }, 2500);
+    }, 2000);
 
     const handleUnload = () => {
       storageService.sendOffline(studentId);
