@@ -1029,21 +1029,21 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-800">
                     {filteredStudents.map((student) => {
-                      const isOnline = onlineStudentIds.includes(student.id);
+                      const isOnline = onlineStudentIds.includes(student.id) || onlineSessions.some((s) => (s.studentId === student.id || s.studentName.toLowerCase() === student.fullName.toLowerCase()) && Date.now() - s.lastSeen < 25000);
                       return (
                         <tr key={student.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-3.5 px-4 font-bold text-slate-900">
                             <div className="flex flex-col gap-1 items-start">
                               <span className="font-extrabold text-slate-900">{student.fullName}</span>
                               {isOnline ? (
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
                                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                  <span>متصل الآن • {new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' })}</span>
+                                  <span>متاح</span>
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                   <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                  <span>آخر ظهور: {student.lastSeenFormatted || `اليوم • ${new Date(student.lastSeenTimestamp || Date.now()).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' })}`}</span>
+                                  <span>غير متاح</span>
                                 </span>
                               )}
                             </div>
