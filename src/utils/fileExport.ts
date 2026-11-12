@@ -115,7 +115,7 @@ export async function downloadStampedImage(
   const scale = canvasWidth / imgWidth;
   const scaledImgHeight = imgHeight * scale;
 
-  const headerHeight = studentInfo ? 260 : 110;
+  const headerHeight = studentInfo ? 280 : 120;
   const totalHeight = headerHeight + scaledImgHeight;
 
   const canvas = document.createElement('canvas');
@@ -130,7 +130,7 @@ export async function downloadStampedImage(
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvasWidth, totalHeight);
 
-  // 2. Official Header Banner
+  // 2. Official Header Banner with Royal Emerald Gradient
   const grad = ctx.createLinearGradient(0, 0, canvasWidth, 0);
   grad.addColorStop(0, '#064e3b');
   grad.addColorStop(0.5, '#065f46');
@@ -148,23 +148,23 @@ export async function downloadStampedImage(
   // School name and title
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 28px "Cairo", Tahoma, sans-serif';
-  ctx.fillText(`${schoolName} • ${platformTitle}`, canvasWidth - 36, 44);
+  ctx.fillText(`${schoolName} • ${platformTitle}`, canvasWidth - 36, 46);
 
   ctx.fillStyle = '#a7f3d0';
-  ctx.font = 'bold 20px "Cairo", Tahoma, sans-serif';
-  ctx.fillText(`ورقة عمل وملخص دراسي معتمد: ${summary.title} • ${summary.grade} - ${summary.subject}`, canvasWidth - 36, 80);
+  ctx.font = 'bold 19px "Cairo", Tahoma, sans-serif';
+  ctx.fillText(`ورقة عمل وملخص دراسي معتمد : ${summary.title} • ${summary.grade} - ${summary.subject}`, canvasWidth - 36, 82);
 
   // Student credentials & Brochure Emblem stamp box
   if (studentInfo) {
     const boxY = 100;
     const boxWidth = canvasWidth - 72;
-    const boxHeight = 145;
+    const boxHeight = 162;
     const boxX = 36;
 
     // Soft ivory background with subtle inner tint
     ctx.fillStyle = '#fffdf7';
     ctx.beginPath();
-    ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 14);
+    ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 16);
     ctx.fill();
 
     // Dual luxury border (emerald & gold)
@@ -174,79 +174,129 @@ export async function downloadStampedImage(
 
     ctx.lineWidth = 1;
     ctx.strokeStyle = '#f59e0b';
-    ctx.strokeRect(boxX + 3, boxY + 3, boxWidth - 6, boxHeight - 6);
+    ctx.strokeRect(boxX + 3.5, boxY + 3.5, boxWidth - 7, boxHeight - 7);
 
-    // Top title pill badge
+    // 1. Top Right: Title Badge Pill (Offset safely inside right border)
+    const titleBadgeText = 'بيانات توثيق الطالب والملف المعتمد ✓';
+    ctx.font = 'bold 13.5px "Cairo", Tahoma, sans-serif';
+    const titleBadgeTextWidth = ctx.measureText(titleBadgeText).width;
+    const titleBadgeWidth = titleBadgeTextWidth + 36;
+    const titleBadgeX = boxX + boxWidth - titleBadgeWidth - 24;
+    const titleBadgeY = boxY + 12;
+
     ctx.fillStyle = '#065f46';
     ctx.beginPath();
-    ctx.roundRect(boxX + boxWidth - 250, boxY + 8, 230, 26, 8);
+    ctx.roundRect(titleBadgeX, titleBadgeY, titleBadgeWidth, 27, 8);
     ctx.fill();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
 
+    ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 14px "Cairo", Tahoma, sans-serif';
-    ctx.fillText('بيانات توثيق الطالب والملف المعتمد ✓', boxX + boxWidth - 18, boxY + 26);
+    ctx.font = 'bold 13px "Cairo", Tahoma, sans-serif';
+    ctx.fillText(titleBadgeText, titleBadgeX + titleBadgeWidth / 2, titleBadgeY + 18.5);
 
-    // Date tag (Saudi Arabia timezone Asia/Riyadh, aligned cleanly from left)
+    // 2. Top Left: Date Badge Pill (Offset safely inside left border, completely separate from emblem)
     const riyadhDateStr = new Date().toLocaleDateString('ar-SA', {
       timeZone: 'Asia/Riyadh',
       day: 'numeric',
       month: 'long',
       year: 'numeric',
     });
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#b45309';
+    const dateLabel = `تاريخ التوثيق : ${riyadhDateStr} م`;
     ctx.font = 'bold 13px "Cairo", Tahoma, sans-serif';
-    ctx.fillText(`تاريخ التوثيق: ${riyadhDateStr} م`, boxX + 24, boxY + 26);
+    const dateTextWidth = ctx.measureText(dateLabel).width;
+    const datePillWidth = Math.max(dateTextWidth + 32, 210);
+    const datePillX = boxX + 24;
+    const datePillY = boxY + 12;
 
-    // Column 1 (Right): Student Name & School
+    ctx.fillStyle = '#fef3c7';
+    ctx.beginPath();
+    ctx.roundRect(datePillX, datePillY, datePillWidth, 27, 8);
+    ctx.fill();
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#92400e';
+    ctx.fillText(dateLabel, datePillX + datePillWidth / 2, datePillY + 18.5);
+
+    // Vertical row positions (generous vertical spacing, 46px apart)
+    const row1Y = boxY + 80;
+    const row2Y = boxY + 128;
+
+    // Reset text alignment for student data columns
     ctx.textAlign = 'right';
-    ctx.fillStyle = '#064e3b';
-    ctx.font = 'bold 15px "Cairo", Tahoma, sans-serif';
-    ctx.fillText('اسم الطالب:', boxX + boxWidth - 30, boxY + 66);
+    ctx.direction = 'rtl';
+
+    // 3. Column 1 (Right): Student Name & School (with clean, dynamic spacing!)
+    const col1X = boxX + boxWidth - 32;
+
+    // Row 1: Student Name
+    const studentLabel = 'اسم الطالب : ';
+    ctx.fillStyle = '#047857';
+    ctx.font = 'bold 16px "Cairo", Tahoma, sans-serif';
+    ctx.fillText(studentLabel, col1X, row1Y);
+    const studentLabelWidth = ctx.measureText(studentLabel).width;
+
     ctx.fillStyle = '#022c22';
-    ctx.font = '900 22px "Cairo", Tahoma, sans-serif';
-    ctx.fillText(studentInfo.studentName, boxX + boxWidth - 110, boxY + 68);
+    ctx.font = '900 21px "Cairo", Tahoma, sans-serif';
+    ctx.fillText(studentInfo.studentName, col1X - studentLabelWidth - 14, row1Y);
 
-    ctx.fillStyle = '#475569';
-    ctx.font = 'bold 14px "Cairo", Tahoma, sans-serif';
-    ctx.fillText('المدرسة:', boxX + boxWidth - 30, boxY + 112);
+    // Row 2: School Name
+    const schoolLabel = 'المدرسة : ';
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 15px "Cairo", Tahoma, sans-serif';
+    ctx.fillText(schoolLabel, col1X, row2Y);
+    const schoolLabelWidth = ctx.measureText(schoolLabel).width;
+
     ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 18px "Cairo", Tahoma, sans-serif';
-    ctx.fillText(studentInfo.schoolName, boxX + boxWidth - 95, boxY + 112);
+    ctx.font = 'bold 17px "Cairo", Tahoma, sans-serif';
+    ctx.fillText(studentInfo.schoolName, col1X - schoolLabelWidth - 14, row2Y);
 
-    // Column 2 (Center): Teacher Name & Grade/Subject
-    const col2X = boxX + boxWidth * 0.48;
-    ctx.fillStyle = '#475569';
-    ctx.font = 'bold 14px "Cairo", Tahoma, sans-serif';
-    ctx.fillText('المعلم المشرف:', col2X, boxY + 66);
+    // 4. Column 2 (Center): Teacher Name & Grade/Subject (with clean, dynamic spacing!)
+    const col2X = boxX + boxWidth * 0.54;
+
+    // Row 1: Teacher Name
+    const teacherLabel = 'المعلم المشرف : ';
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 15px "Cairo", Tahoma, sans-serif';
+    ctx.fillText(teacherLabel, col2X, row1Y);
+    const teacherLabelWidth = ctx.measureText(teacherLabel).width;
+
     ctx.fillStyle = '#065f46';
     ctx.font = 'bold 18px "Cairo", Tahoma, sans-serif';
-    ctx.fillText(studentInfo.teacherName, col2X - 105, boxY + 66);
+    ctx.fillText(studentInfo.teacherName, col2X - teacherLabelWidth - 14, row1Y);
 
-    ctx.fillStyle = '#475569';
-    ctx.font = 'bold 14px "Cairo", Tahoma, sans-serif';
-    ctx.fillText('الصف والمقرر:', col2X, boxY + 112);
+    // Row 2: Grade and Subject
+    const gradeLabel = 'الصف والمقرر : ';
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 15px "Cairo", Tahoma, sans-serif';
+    ctx.fillText(gradeLabel, col2X, row2Y);
+    const gradeLabelWidth = ctx.measureText(gradeLabel).width;
+
     ctx.fillStyle = '#0f766e';
     ctx.font = 'bold 18px "Cairo", Tahoma, sans-serif';
-    ctx.fillText(`${summary.grade} • ${summary.subject}`, col2X - 105, boxY + 112);
+    ctx.fillText(`${summary.grade} • ${summary.subject}`, col2X - gradeLabelWidth - 14, row2Y);
 
-    // Column 3 (Left): OFFICIAL BROCHURE EMBLEM (شعار مطويات تعليمية معتمدة)
-    const emblemX = boxX + 105;
-    const emblemY = boxY + 75;
+    // 5. Column 3 (Left): OFFICIAL BROCHURE EMBLEM (شعار مطويات معتمدة - positioned cleanly below date pill)
+    const emblemX = datePillX + datePillWidth / 2;
+    const emblemY = boxY + 102;
 
-    // Draw folded brochure icon & luxury emblem
     ctx.save();
     // Emblem circular glow badge
-    const radGrad = ctx.createRadialGradient(emblemX, emblemY, 10, emblemX, emblemY, 52);
+    const radGrad = ctx.createRadialGradient(emblemX, emblemY, 8, emblemX, emblemY, 46);
     radGrad.addColorStop(0, '#fef3c7');
-    radGrad.addColorStop(0.8, '#fde68a');
+    radGrad.addColorStop(0.75, '#fde68a');
     radGrad.addColorStop(1, '#f59e0b');
     ctx.fillStyle = radGrad;
     ctx.beginPath();
-    ctx.arc(emblemX, emblemY, 48, 0, Math.PI * 2);
+    ctx.arc(emblemX, emblemY, 40, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.2;
     ctx.strokeStyle = '#b45309';
     ctx.stroke();
 
@@ -254,23 +304,23 @@ export async function downloadStampedImage(
     ctx.lineWidth = 1;
     ctx.strokeStyle = '#065f46';
     ctx.beginPath();
-    ctx.arc(emblemX, emblemY, 42, 0, Math.PI * 2);
+    ctx.arc(emblemX, emblemY, 34, 0, Math.PI * 2);
     ctx.stroke();
 
     // Folded brochure icon geometry (3 panels: Left, Center, Right folded like a brochure / مطوية)
     // Center panel
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(emblemX - 12, emblemY - 26, 24, 32);
+    ctx.fillRect(emblemX - 10, emblemY - 22, 20, 26);
     ctx.strokeStyle = '#065f46';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(emblemX - 12, emblemY - 26, 24, 32);
+    ctx.lineWidth = 1.4;
+    ctx.strokeRect(emblemX - 10, emblemY - 22, 20, 26);
 
     // Left folded panel
     ctx.beginPath();
-    ctx.moveTo(emblemX - 12, emblemY - 26);
-    ctx.lineTo(emblemX - 26, emblemY - 22);
-    ctx.lineTo(emblemX - 26, emblemY + 10);
-    ctx.lineTo(emblemX - 12, emblemY + 6);
+    ctx.moveTo(emblemX - 10, emblemY - 22);
+    ctx.lineTo(emblemX - 22, emblemY - 18);
+    ctx.lineTo(emblemX - 22, emblemY + 8);
+    ctx.lineTo(emblemX - 10, emblemY + 4);
     ctx.closePath();
     ctx.fillStyle = '#ecfdf5';
     ctx.fill();
@@ -278,10 +328,10 @@ export async function downloadStampedImage(
 
     // Right folded panel
     ctx.beginPath();
-    ctx.moveTo(emblemX + 12, emblemY - 26);
-    ctx.lineTo(emblemX + 26, emblemY - 22);
-    ctx.lineTo(emblemX + 26, emblemY + 10);
-    ctx.lineTo(emblemX + 12, emblemY + 6);
+    ctx.moveTo(emblemX + 10, emblemY - 22);
+    ctx.lineTo(emblemX + 22, emblemY - 18);
+    ctx.lineTo(emblemX + 22, emblemY + 8);
+    ctx.lineTo(emblemX + 10, emblemY + 4);
     ctx.closePath();
     ctx.fillStyle = '#ecfdf5';
     ctx.fill();
@@ -291,27 +341,27 @@ export async function downloadStampedImage(
     ctx.strokeStyle = '#10b981';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(emblemX - 7, emblemY - 20);
-    ctx.lineTo(emblemX + 7, emblemY - 20);
-    ctx.moveTo(emblemX - 7, emblemY - 14);
-    ctx.lineTo(emblemX + 7, emblemY - 14);
-    ctx.moveTo(emblemX - 7, emblemY - 8);
-    ctx.lineTo(emblemX + 7, emblemY - 8);
+    ctx.moveTo(emblemX - 6, emblemY - 17);
+    ctx.lineTo(emblemX + 6, emblemY - 17);
+    ctx.moveTo(emblemX - 6, emblemY - 12);
+    ctx.lineTo(emblemX + 6, emblemY - 12);
+    ctx.moveTo(emblemX - 6, emblemY - 7);
+    ctx.lineTo(emblemX + 6, emblemY - 7);
     ctx.stroke();
 
     // Ribbon banner at bottom of emblem
     ctx.fillStyle = '#065f46';
     ctx.beginPath();
-    ctx.roundRect(emblemX - 52, emblemY + 14, 104, 22, 6);
+    ctx.roundRect(emblemX - 48, emblemY + 12, 96, 20, 6);
     ctx.fill();
     ctx.strokeStyle = '#f59e0b';
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.2;
     ctx.stroke();
 
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 11px "Cairo", Tahoma, sans-serif';
-    ctx.fillText('البشير التعليمي', emblemX, emblemY + 29);
+    ctx.font = 'bold 10.5px "Cairo", Tahoma, sans-serif';
+    ctx.fillText('مطويات البشير', emblemX, emblemY + 25.5);
     ctx.restore();
   }
 
@@ -666,23 +716,23 @@ export async function downloadSummaryDocument(
         <div style="flex: 1; min-width: 260px;">
           <div class="stamp-header-top">
             <span class="stamp-title-badge">بيانات توثيق الطالب والملف المعتمد ✓</span>
-            <span style="font-size: 11px; font-weight: 800; color: #92400e;">تاريخ التوثيق: ${new Date().toLocaleDateString('ar-SA', { timeZone: 'Asia/Riyadh' })} م</span>
+            <span style="font-size: 11px; font-weight: 800; color: #92400e;">تاريخ التوثيق : ${new Date().toLocaleDateString('ar-SA', { timeZone: 'Asia/Riyadh' })} م</span>
           </div>
           <div class="stamp-grid">
             <div class="stamp-cell">
-              <span class="stamp-label">اسم الطالب:</span>
+              <span class="stamp-label">اسم الطالب :</span>
               <span class="stamp-value" style="color: #064e3b; font-size: 16px;">${escapeHtml(studentInfo.studentName)}</span>
             </div>
             <div class="stamp-cell">
-              <span class="stamp-label">المدرسة:</span>
+              <span class="stamp-label">المدرسة :</span>
               <span class="stamp-value">${escapeHtml(studentInfo.schoolName)}</span>
             </div>
             <div class="stamp-cell">
-              <span class="stamp-label">المعلم المشرف:</span>
+              <span class="stamp-label">المعلم المشرف :</span>
               <span class="stamp-value">${escapeHtml(studentInfo.teacherName)}</span>
             </div>
             <div class="stamp-cell">
-              <span class="stamp-label">الصف والمقرر:</span>
+              <span class="stamp-label">الصف والمقرر :</span>
               <span class="stamp-value">${escapeHtml(summary.grade)} - ${escapeHtml(summary.subject)}</span>
             </div>
           </div>

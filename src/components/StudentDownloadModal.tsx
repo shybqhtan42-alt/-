@@ -236,13 +236,14 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
                   شعار مطويات معتمدة
                 </span>
               </div>
-              <div className="text-right space-y-1">
-                <div className="text-gray-800 text-xs">
-                  اسم الطالب: <span className="font-black text-emerald-800">{studentName || 'اكتب اسمك أعلاه'}</span>
+              <div className="text-right space-y-1.5 pt-0.5">
+                <div className="text-gray-800 text-xs flex items-center justify-between">
+                  <span className="text-emerald-800 font-bold">اسم الطالب :</span>
+                  <span className="font-black text-emerald-950 text-sm">{studentName || 'اكتب اسمك أعلاه'}</span>
                 </div>
-                <div className="flex items-center justify-between text-gray-600 text-[11px]">
-                  <span>إشراف: <strong className="text-emerald-700">{teacherName || 'المعلم المشرف'}</strong></span>
-                  <span>المادة: <strong>{summary.subject}</strong></span>
+                <div className="flex items-center justify-between text-gray-600 text-[11px] pt-0.5 border-t border-slate-100">
+                  <span>المعلم المشرف : <strong className="text-emerald-700">{teacherName || 'المعلم'}</strong></span>
+                  <span>المادة : <strong>{summary.subject}</strong></span>
                 </div>
               </div>
             </div>

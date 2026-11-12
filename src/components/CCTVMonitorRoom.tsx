@@ -561,10 +561,10 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
             {/* Student Documentation Info Box with Al-Basheer Platform Logo */}
             <div className="bg-amber-50/80 border border-amber-300 rounded-lg p-1.5 flex items-center justify-between gap-1 text-[7px] my-1 shrink-0">
               <div className="space-y-0.5">
-                <div className="font-bold text-amber-900">بيانات توثيق الطالب والملف:</div>
-                <div>اسم الطالب: <strong className="text-emerald-900 font-black">{cam.studentName}</strong></div>
-                <div>المدرسة: <strong>{config.schoolName || 'مدرسة عبد الملك بن مروان'}</strong></div>
-                <div>المعلم المشرف: <strong>{config.authorName || 'أ. صهيب القحطاني'}</strong> • الصف: <strong>ثاني متوسط</strong> • المادة: <strong>{cam.currentSubject || 'العلوم'}</strong></div>
+                <div className="font-bold text-amber-900">بيانات توثيق الطالب والملف :</div>
+                <div>اسم الطالب : <strong className="text-emerald-900 font-black">{cam.studentName}</strong></div>
+                <div>المدرسة : <strong>{config.schoolName || 'مدرسة عبد الملك بن مروان'}</strong></div>
+                <div>المعلم المشرف : <strong>{config.authorName || 'أ. صهيب القحطاني'}</strong> • الصف : <strong>ثاني متوسط</strong> • المادة : <strong>{cam.currentSubject || 'العلوم'}</strong></div>
               </div>
               <div className="bg-emerald-900 text-white px-2 py-1 rounded text-center shrink-0 border border-amber-400">
                 <div className="text-[6px] text-amber-300 font-bold">شعار المنصة</div>
