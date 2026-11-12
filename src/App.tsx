@@ -180,12 +180,21 @@ export default function App() {
   useEffect(() => {
     const studentId = currentUser.role === 'student' && currentUser.student?.id
       ? currentUser.student.id
-      : 'guest_user';
+      : (() => {
+          let sid = localStorage.getItem('al_basheer_client_device_id');
+          if (!sid) {
+            sid = 'device_' + Math.random().toString(36).substring(2, 9);
+            localStorage.setItem('al_basheer_client_device_id', sid);
+          }
+          return sid;
+        })();
+
+    const savedName = localStorage.getItem('al_basheer_student_name');
 
     const getTelemetry = () => ({
       studentName: currentUser.role === 'student'
         ? (currentUser.student?.fullName || 'طالب مسجل')
-        : 'زائر / طالب يتصفح',
+        : (savedName || 'طالب يتصفح المنصة'),
       grade: currentUser.role === 'student'
         ? (currentUser.student?.grade || config.defaultGrade || 'ثاني متوسط')
         : (config.defaultGrade || 'ثاني متوسط'),

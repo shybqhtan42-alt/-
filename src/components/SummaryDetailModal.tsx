@@ -125,8 +125,9 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
   };
 
   const requiresStudentVerification =
-    (config?.requireStudentInfoOnDownload ?? true) &&
-    (summary?.requiresStudentInfo ?? true);
+    typeof summary?.requiresStudentInfo === 'boolean'
+      ? summary.requiresStudentInfo
+      : (config?.requireStudentInfoOnDownload ?? true);
 
   const executeDownloadWithInfo = (info?: StudentDownloadInfo, format?: 'image' | 'document' | 'text') => {
     if (format === 'image' || (isImageAttachment && hasAttachment && format !== 'document' && format !== 'text')) {

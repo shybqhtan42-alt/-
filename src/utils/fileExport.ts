@@ -24,26 +24,52 @@ function triggerDownload(blob: Blob, filename: string) {
  * Converts any image URL (including relative /uploads/ or remote URLs) to base64
  * so it is guaranteed to embed self-contained into HTML documents or canvas without network dependencies.
  */
-async function resolveImageAsBase64(src?: string): Promise<string | null> {
-  if (!src) return null;
-  if (src.startsWith('data:image/')) return src;
-
-  try {
-    const res = await fetch(src);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        resolve(typeof reader.result === 'string' ? reader.result : null);
-      };
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch (err) {
-    console.warn('Could not convert image to base64:', err);
-    return null;
+async function resolveImageAsBase64(src?: string, titleHint?: string): Promise<string | null> {
+  if (src && src.startsWith('data:image/')) return src;
+  if (src && src.startsWith('data:')) {
+    return src.replace(/^data:[^;]+;base64,/, 'data:image/jpeg;base64,');
   }
+
+  const urlsToTry: string[] = [];
+  if (src) {
+    urlsToTry.push(src);
+    if (typeof window !== 'undefined' && src.startsWith('/')) {
+      urlsToTry.push(window.location.origin + src);
+    }
+  }
+
+  // Fallbacks for known school assets if the main url failed or was not uploaded
+  if (titleHint?.includes('الطاقة') || titleHint?.includes('العلوم') || src?.includes('Screenshot')) {
+    urlsToTry.push('/assets/aistudio/Screenshot_________________Chrome_ccc1b384.jpg');
+    urlsToTry.push('/uploads/Screenshot_٢٠٢٦١١٠٨_٢٢٠٦٥٦_Chrome.jpg');
+    if (typeof window !== 'undefined') {
+      urlsToTry.push(window.location.origin + '/assets/aistudio/Screenshot_________________Chrome_ccc1b384.jpg');
+    }
+  }
+
+  for (const url of urlsToTry) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 0) {
+          const base64 = await new Promise<string | null>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              resolve(typeof reader.result === 'string' ? reader.result : null);
+            };
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+          if (base64) return base64;
+        }
+      }
+    } catch (_) {
+      // try next
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -60,18 +86,24 @@ export async function downloadStampedImage(
   const teacherName = studentInfo?.teacherName || config?.defaultTeacherName || config?.authorName || 'أ. صهيب القحطاني';
   const rawImage = summary.attachmentData || summary.attachmentUrl;
 
-  const base64Src = await resolveImageAsBase64(rawImage);
+  const base64Src = await resolveImageAsBase64(rawImage, summary.title);
   if (!base64Src) {
     // Fallback to document generator
     return downloadSummaryDocument(summary, config, studentInfo);
   }
 
   const img = new Image();
-  img.crossOrigin = 'anonymous';
+  // only set crossOrigin if not data URL
+  if (!base64Src.startsWith('data:')) {
+    img.crossOrigin = 'anonymous';
+  }
 
-  await new Promise<void>((resolve, reject) => {
+  await new Promise<void>((resolve) => {
     img.onload = () => resolve();
-    img.onerror = () => reject(new Error('Failed to load image into canvas'));
+    img.onerror = () => {
+      // If error on loading image, resolve gracefully without crashing
+      resolve();
+    };
     img.src = base64Src;
   });
 
@@ -154,10 +186,17 @@ export async function downloadStampedImage(
     ctx.font = 'bold 14px "Cairo", Tahoma, sans-serif';
     ctx.fillText('بيانات توثيق الطالب والملف المعتمد ✓', boxX + boxWidth - 18, boxY + 26);
 
-    // Date tag
+    // Date tag (Saudi Arabia timezone Asia/Riyadh, aligned cleanly from left)
+    const riyadhDateStr = new Date().toLocaleDateString('ar-SA', {
+      timeZone: 'Asia/Riyadh',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    ctx.textAlign = 'left';
     ctx.fillStyle = '#b45309';
     ctx.font = 'bold 13px "Cairo", Tahoma, sans-serif';
-    ctx.fillText(`تاريخ التوثيق: ${new Date().toLocaleDateString('ar-SA')} م`, boxX + 220, boxY + 26);
+    ctx.fillText(`تاريخ التوثيق: ${riyadhDateStr} م`, boxX + 24, boxY + 26);
 
     // Column 1 (Right): Student Name & School
     ctx.textAlign = 'right';
@@ -318,7 +357,7 @@ export async function downloadSummaryDocument(
     Boolean(summary.attachmentData?.startsWith('data:image/'));
 
   const rawImageSrc = summary.attachmentData || summary.attachmentUrl;
-  const resolvedBase64Image = isImage ? await resolveImageAsBase64(rawImageSrc) : null;
+  const resolvedBase64Image = isImage ? await resolveImageAsBase64(rawImageSrc, summary.title) : null;
 
   // If this summary is exclusively a standalone image and student downloaded it directly:
   // Use downloadStampedImage for pristine image file output!
@@ -627,7 +666,7 @@ export async function downloadSummaryDocument(
         <div style="flex: 1; min-width: 260px;">
           <div class="stamp-header-top">
             <span class="stamp-title-badge">بيانات توثيق الطالب والملف المعتمد ✓</span>
-            <span style="font-size: 11px; font-weight: 800; color: #92400e;">تاريخ التوثيق: ${new Date().toLocaleDateString('ar-SA')} م</span>
+            <span style="font-size: 11px; font-weight: 800; color: #92400e;">تاريخ التوثيق: ${new Date().toLocaleDateString('ar-SA', { timeZone: 'Asia/Riyadh' })} م</span>
           </div>
           <div class="stamp-grid">
             <div class="stamp-cell">
@@ -682,20 +721,10 @@ export async function downloadSummaryDocument(
       <div class="summary-text-box">${escapeHtml(summary.summaryText)}</div>
       ` : ''}
 
-      ${showFooterStamp && studentInfo ? `
-      <!-- Official Footer Stamp Box as specified by manager -->
-      <div class="student-stamp-footer">
-        <div class="stamp-seal-circle">✓</div>
-        <div>
-          <div>تم توثيق واعتماد هذا المستند رسميًا للطالب: <strong style="color: #064e3b; font-size: 14px;">${escapeHtml(studentInfo.studentName)}</strong></div>
-          <div style="font-size: 11px; color: #047857; margin-top: 2px;">مدرسة: ${escapeHtml(studentInfo.schoolName)} · إشراف الأستاذ: <strong>${escapeHtml(studentInfo.teacherName)}</strong> · ${new Date().toLocaleDateString('ar-SA')} م</div>
-        </div>
-      </div>
-      ` : ''}
     </div>
 
     <div class="footer-bar">
-      <div>وثيقة دراسية معتمدة · ${escapeHtml(schoolName)}</div>
+      <div>وثيقة دراسية ومطوية معتمدة · ${escapeHtml(platformTitle)} · ${escapeHtml(schoolName)}</div>
       <button class="print-button no-print" onclick="window.print()">طباعة / حفظ كـ PDF</button>
     </div>
   </div>
@@ -732,7 +761,7 @@ ${platformTitle} - ${schoolName}
 اسم الطالب: ${studentInfo.studentName}
 المدرسة: ${studentInfo.schoolName}
 المعلم المشرف: ${studentInfo.teacherName}
-تاريخ التنزيل: ${new Date().toLocaleDateString('ar-SA')}
+تاريخ التنزيل: ${new Date().toLocaleDateString('ar-SA', { timeZone: 'Asia/Riyadh' })} م
 ===============================================================`;
   }
 
@@ -747,7 +776,7 @@ ${platformTitle} - ${schoolName}
 ---------------------------------------------------------------
 ${summary.summaryText || 'ورقة عمل ومرفق دراسي معتمد'}
 ===============================================================
-حقوق الطبع والتوثيق محفوظة لمدرسة ${schoolName}
+${platformTitle} • ${schoolName}
 `;
 
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });

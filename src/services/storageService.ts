@@ -626,7 +626,7 @@ export const storageService = {
     const newStudent: Student = {
       ...student,
       id: 'std-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-      registeredAt: new Date().toLocaleDateString('ar-SA'),
+      registeredAt: new Date().toLocaleDateString('ar-SA', { timeZone: 'Asia/Riyadh' }),
     };
     students.unshift(newStudent);
     this.saveStudents(students);
@@ -742,22 +742,45 @@ export const storageService = {
     const summaries = this.getSummaries();
     const config = this.getConfig();
 
-    // Check if an item with identical title, subject, grade, and category already exists (prevent duplicate creation)
-    const existing = summaries.find(
+    // Check if an item with identical title and subject already exists -> update it with new content/files
+    const existingIndex = summaries.findIndex(
       (s) =>
-        (s.title || '').trim() === (summary.title || '').trim() &&
-        s.subject === summary.subject &&
-        s.grade === summary.grade &&
-        s.category === summary.category
+        (s.title || '').trim().toLowerCase() === (summary.title || '').trim().toLowerCase() &&
+        s.subject === summary.subject
     );
-    if (existing) {
-      console.warn('Summary with identical content already exists, preventing duplicate creation:', summary.title);
-      return existing;
+
+    if (existingIndex !== -1) {
+      const existing = summaries[existingIndex];
+      const updatedItem: SummaryItem = {
+        ...existing,
+        ...summary,
+        dateAdded: existing.dateAdded || `${config.yearHijri} هـ / ${config.yearGregorian} م`,
+      };
+      summaries[existingIndex] = updatedItem;
+
+      // Remove from deleted list
+      try {
+        const deletedList = this.getDeletedSummaryIds().filter((dId) => dId !== existing.id);
+        localStorage.setItem(STORAGE_KEYS.DELETED_SUMMARIES, JSON.stringify(deletedList));
+      } catch (_) {}
+
+      this.saveSummaries(summaries);
+
+      try {
+        await fetch(`/api/summaries/${encodeURIComponent(existing.id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedItem),
+        });
+      } catch (_) {}
+
+      return updatedItem;
     }
 
+    const newId = 'sum-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
     const newSummary: SummaryItem = {
       ...summary,
-      id: 'sum-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      id: newId,
       dateAdded: `${config.yearHijri} هـ / ${config.yearGregorian} م`,
     };
 

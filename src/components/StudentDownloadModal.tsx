@@ -60,9 +60,15 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
     }
 
     setError('');
+    const cleanName = studentName.trim();
+    try {
+      localStorage.setItem('al_basheer_student_name', cleanName);
+      window.dispatchEvent(new CustomEvent('al_basheer_data_updated'));
+    } catch (_) {}
+
     onConfirmDownload(
       {
-        studentName: studentName.trim(),
+        studentName: cleanName,
         schoolName: schoolName.trim(),
         teacherName: teacherName.trim(),
       },
@@ -178,12 +184,12 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
                   setStudentName(e.target.value);
                   if (error) setError('');
                 }}
-                placeholder="مثال: زياد علي عسيري"
+                placeholder="اكتب اسم الطالب كاملاً"
                 className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm font-medium text-gray-800 outline-none transition"
                 autoFocus
                 required
               />
-              <p className="text-[11px] text-gray-400 mt-1">يظهر هذا الاسم في ترويسة وختم الملف كاسم الطالب المستلم</p>
+              <p className="text-[11px] text-gray-400 mt-1">يُدرج اسم الطالب في ترويسة ورقة العمل والمطوية المعتمدة</p>
             </div>
 
             <div>
@@ -204,29 +210,40 @@ export const StudentDownloadModal: React.FC<StudentDownloadModalProps> = ({
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1.5">
                 <GraduationCap className="w-4 h-4 text-emerald-600" />
-                <span>اسم المعلم / المشرف *</span>
+                <span>اسم المعلم المشرف *</span>
               </label>
               <input
                 type="text"
                 value={teacherName}
                 onChange={(e) => setTeacherName(e.target.value)}
-                placeholder="مثال: صهيب القحطاني"
+                placeholder="اسم المعلم المشرف"
                 className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm font-medium text-gray-800 outline-none transition"
                 required
               />
             </div>
           </div>
 
-          {/* Stamp Preview Card */}
-          <div className="p-3 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-300 rounded-xl text-center">
-            <div className="text-[11px] font-bold text-emerald-800 mb-1">معاينة بطاقة الاعتماد التي ستطبع داخل الملف:</div>
-            <div className="inline-block bg-white border-2 border-emerald-500 rounded-lg px-4 py-2 text-xs shadow-sm">
-              <div className="font-bold text-emerald-800">{schoolName || 'اسم المدرسة'}</div>
-              <div className="text-gray-700 mt-0.5">
-                الطالب: <span className="font-bold text-emerald-700">{studentName || 'لم يُحدد بعد'}</span>
+          {/* Brochure & School Card Preview */}
+          <div className="p-3 bg-gradient-to-br from-emerald-50 via-teal-50 to-amber-50 border border-emerald-300 rounded-xl text-center">
+            <div className="text-[11px] font-bold text-emerald-900 mb-2 flex items-center justify-center gap-1.5">
+              <span>🏷️</span>
+              <span>معاينة ترويسة المطوية المعتمدة الرسمية:</span>
+            </div>
+            <div className="inline-block bg-white border-2 border-emerald-600 rounded-xl px-5 py-2.5 text-xs shadow-sm max-w-sm w-full">
+              <div className="flex items-center justify-between border-b border-emerald-100 pb-1.5 mb-1.5">
+                <span className="font-black text-emerald-900 text-xs">{schoolName || 'مدرسة عبد الملك بن مروان'}</span>
+                <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-300">
+                  شعار مطويات معتمدة
+                </span>
               </div>
-              <div className="text-gray-500 text-[10px] mt-0.5">
-                بإشراف المعلم: <span className="font-semibold text-gray-700">{teacherName || 'المعلم'}</span>
+              <div className="text-right space-y-1">
+                <div className="text-gray-800 text-xs">
+                  اسم الطالب: <span className="font-black text-emerald-800">{studentName || 'اكتب اسمك أعلاه'}</span>
+                </div>
+                <div className="flex items-center justify-between text-gray-600 text-[11px]">
+                  <span>إشراف: <strong className="text-emerald-700">{teacherName || 'المعلم المشرف'}</strong></span>
+                  <span>المادة: <strong>{summary.subject}</strong></span>
+                </div>
               </div>
             </div>
           </div>

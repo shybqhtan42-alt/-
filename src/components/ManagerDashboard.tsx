@@ -518,6 +518,17 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     }
   };
 
+  const handleToggleRequireStudentInfo = async (id: string, current: boolean) => {
+    await storageService.updateSummary(id, {
+      requiresStudentInfo: !current,
+    });
+    showToast(!current
+      ? 'تم تفعيل خانة كتابة اسم الطالب والمدرسة والمعلم قبل تنزيل هذا الملف.'
+      : 'تم إلغاء خانة كتابة الاسم لهذا الملف! أصبح التنزيل مباشراً دون كتابة بيانات.'
+    );
+    onRefreshSummaries();
+  };
+
   // --- Settings Handlers ---
   const handleSaveSettings = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -1027,12 +1038,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                               {isOnline ? (
                                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
                                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                  <span>متصل الآن • {new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
+                                  <span>متصل الآن • {new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' })}</span>
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                   <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                  <span>آخر ظهور: {student.lastSeenFormatted || `اليوم • ${new Date(student.lastSeenTimestamp || Date.now()).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}`}</span>
+                                  <span>آخر ظهور: {student.lastSeenFormatted || `اليوم • ${new Date(student.lastSeenTimestamp || Date.now()).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' })}`}</span>
                                 </span>
                               )}
                             </div>
@@ -1235,25 +1246,44 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 </div>
 
                 {/* Require Student Info on Download for this Summary */}
-                <div className="bg-emerald-50/90 p-4 rounded-xl border border-emerald-300 flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    id="managerRequiresStudentInfoToggle"
-                    checked={summaryRequiresStudentInfo}
-                    onChange={(e) => setSummaryRequiresStudentInfo(e.target.checked)}
-                    className="w-4 h-4 text-emerald-700 rounded mt-0.5 accent-emerald-600 cursor-pointer shrink-0"
-                  />
-                  <label htmlFor="managerRequiresStudentInfoToggle" className="text-xs text-emerald-950 cursor-pointer space-y-1">
-                    <div className="font-extrabold flex items-center gap-1.5 text-emerald-900">
-                      <span>📄 توثيق بيانات الطالب (اسم الطالب + المدرسة + المعلم) قبل تنزيل الملف</span>
-                      <span className="text-[10px] bg-emerald-200 text-emerald-900 font-bold px-2 py-0.5 rounded-full">
-                        خيار حر للمدير
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-emerald-800 leading-relaxed">
-                      عند تحديد هذا الخيار، سيُطلب من الطالب كتابة اسمه ومدرسته ومعلمه قبل تنزيل هذا الملف وطباعته معتمداً في الموضع الذي حددته. يمكنك إلغاؤه للسماح بالتنزيل المباشر لهذا الملف دون كتابة بيانات.
-                    </p>
-                  </label>
+                <div className="bg-emerald-50/90 p-4 rounded-xl border border-emerald-300 space-y-2.5">
+                  <div className="font-extrabold flex items-center justify-between text-xs text-emerald-950">
+                    <span className="flex items-center gap-1.5">
+                      <span>📄 هل يحتاج هذا الملف كتابة وتوثيق اسم الطالب والمدرسة والمعلم قبل التنزيل؟</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-200 text-emerald-900 font-bold px-2 py-0.5 rounded-full">
+                      حرية كاملة للمدير
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSummaryRequiresStudentInfo(true)}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                        summaryRequiresStudentInfo
+                          ? 'bg-emerald-700 text-white border-emerald-800 shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>نعم - يكتب اسمه والمدرسة والمعلم</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSummaryRequiresStudentInfo(false)}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                        !summaryRequiresStudentInfo
+                          ? 'bg-amber-700 text-white border-amber-800 shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <X className="w-4 h-4" />
+                      <span>لا - تنزيل مباشر بدون كتابة اسم</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    لك الحرية الكاملة كمدير: ملف تحدد فيه كتابة الاسم وملف آخر بدون كتابة اسم، مع إمكانية تغيير هذا الخيار لاحقاً لأي ملف بضغطة زر واحدة!
+                  </p>
                 </div>
 
                 {/* Upload Image or File */}
@@ -1463,14 +1493,41 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       </p>
                     </div>
 
-                    <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                      <span>تاريخ النشر: {sum.dateAdded}</span>
-                      {sum.attachmentUrl && (
-                        <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                          <ImageIcon className="w-3.5 h-3.5" />
-                          <span>يحتوي مرفق</span>
-                        </span>
-                      )}
+                    <div className="pt-3 mt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleRequireStudentInfo(sum.id, sum.requiresStudentInfo !== false)}
+                          className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer shadow-xs ${
+                            sum.requiresStudentInfo !== false
+                              ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300'
+                              : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                          }`}
+                          title={sum.requiresStudentInfo !== false ? 'انقر لإلغاء طلب كتابة الاسم لهذا الملف والسماح بالتنزيل المباشر' : 'انقر لتفعيل طلب كتابة الاسم والمدرسة قبل التنزيل'}
+                        >
+                          {sum.requiresStudentInfo !== false ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                              <span>طلب الاسم: مفعّل ✓</span>
+                            </>
+                          ) : (
+                            <>
+                              <X className="w-3.5 h-3.5 text-amber-700" />
+                              <span>طلب الاسم: ملغي (تنزيل حر)</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-slate-400 text-[11px]">
+                        <span>تاريخ النشر: {sum.dateAdded}</span>
+                        {sum.attachmentUrl && (
+                          <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                            <ImageIcon className="w-3.5 h-3.5" />
+                            <span>يحتوي مرفق</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

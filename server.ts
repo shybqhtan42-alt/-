@@ -345,11 +345,20 @@ async function startServer() {
       UPLOADS_DIR,
       path.resolve(process.cwd(), 'public', 'uploads'),
       path.resolve(process.cwd(), 'dist', 'uploads'),
+      path.resolve(process.cwd(), 'public', 'assets', 'aistudio'),
     ];
 
     for (const dir of searchDirs) {
       if (!fs.existsSync(dir)) continue;
-      const candidates = [path.join(dir, rawParam), path.join(dir, decoded)];
+      const candidates = [
+        path.join(dir, rawParam),
+        path.join(dir, decoded),
+        // Fallback for energy worksheet if requested by screenshot name
+        (decoded.includes('Screenshot') || decoded.includes('٢٢٠٦٥٦') || decoded.includes('الطاقة'))
+          ? path.join(dir, 'Screenshot_________________Chrome_ccc1b384.jpg')
+          : null,
+      ].filter(Boolean) as string[];
+
       for (const cand of candidates) {
         if (fs.existsSync(cand) && fs.statSync(cand).isFile()) {
           const ext = path.extname(cand).toLowerCase();
@@ -383,12 +392,13 @@ async function startServer() {
       for (const s of db.summaries) {
         const matchUrl = s.attachmentUrl && (s.attachmentUrl.includes(rawParam) || s.attachmentUrl.includes(decoded));
         const matchName = s.attachmentName && (s.attachmentName === rawParam || s.attachmentName === decoded);
-        if (matchUrl || matchName) {
+        const matchEnergy = (s.title?.includes('الطاقة') || s.title?.includes('العلوم')) && (decoded.includes('Screenshot') || decoded.includes('٢٢٠٦٥٦'));
+        if (matchUrl || matchName || matchEnergy) {
           const raw = s.attachmentData || (s.attachmentUrl?.startsWith('data:') ? s.attachmentUrl : null);
           if (raw && raw.startsWith('data:')) {
             try {
               const parts = raw.split(',');
-              const mime = parts[0].match(/:(.*?);/)?.[1] || (s.attachmentType === 'image' ? 'image/png' : 'application/pdf');
+              const mime = parts[0].match(/:(.*?);/)?.[1] || (s.attachmentType === 'image' ? 'image/jpeg' : 'application/pdf');
               const buffer = Buffer.from(parts[1], 'base64');
               registerFileInCacheAndDisk(rawParam, mime, buffer);
               res.setHeader('Content-Type', mime);

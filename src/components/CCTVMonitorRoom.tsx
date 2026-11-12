@@ -41,17 +41,19 @@ export const formatArabicDayAndTime = (timestamp?: number): { full: string; dayO
   const targetDate = timestamp ? new Date(timestamp) : new Date();
   const now = new Date();
   const isToday = targetDate.toDateString() === now.toDateString();
-  const dayName = targetDate.toLocaleDateString('ar-SA', { weekday: 'long' });
+  const dayName = targetDate.toLocaleDateString('ar-SA', { weekday: 'long', timeZone: 'Asia/Riyadh' });
   const fullDate = targetDate.toLocaleDateString('ar-SA', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    timeZone: 'Asia/Riyadh',
   });
   const timeOnly = targetDate.toLocaleTimeString('ar-SA', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: true,
+    timeZone: 'Asia/Riyadh',
   });
 
   const dayLabel = isToday ? `اليوم (${dayName}) ${fullDate}` : `${dayName} (${fullDate})`;
@@ -89,11 +91,11 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
   const getRealSceneFromTelemetry = (): number => {
     const theme = cam.snapshotTheme;
     const sec = (cam.currentSection || '').toLowerCase();
-    if (theme === 'login' || sec.includes('نافذة') || sec.includes('دخول الطالب')) return 2;
+    if (theme === 'login' || sec.includes('نافذة') || sec.includes('دخول')) return 2;
     if (theme === 'materials' || sec.includes('قسم المواد') || sec.includes('المقررات') || sec.includes('المواد')) return 3;
     if (theme === 'portal' || sec.includes('بوابة')) return 1;
-    if (theme === 'summary' || sec.includes('ورقة') || sec.includes('معاينة') || sec.includes('ملخص')) return 4;
-    if (theme === 'game' || sec.includes('ألعاب') || sec.includes('لعبة')) return 5;
+    if (theme === 'download' || theme === 'summary' || sec.includes('تنزيل') || sec.includes('ورقة') || sec.includes('معاينة') || sec.includes('ملخص')) return 4;
+    if (theme === 'game' || sec.includes('ألعاب') || sec.includes('لعبة') || sec.includes('دورية')) return 5;
     return 0; // Default: الصفحة الرئيسية (Home Page)
   };
 
@@ -198,12 +200,14 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    timeZone: 'Asia/Riyadh',
   });
   const currentLiveClock = liveNow.toLocaleTimeString('ar-SA', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: true,
+    timeZone: 'Asia/Riyadh',
   });
 
   if (cam.isSuspended) {
@@ -218,7 +222,7 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
         </p>
         <div className="text-xs font-mono font-bold bg-black/60 text-amber-400 px-3 py-1 rounded-full border border-amber-500/40">
           {cam.suspension?.expiresAt && cam.suspension.expiresAt > 0
-            ? `الإيقاف ينتهي: ${new Date(cam.suspension.expiresAt).toLocaleTimeString('ar-SA')}`
+            ? `الإيقاف ينتهي: ${new Date(cam.suspension.expiresAt).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' })}`
             : 'موقوف حتى يفتح له المدير يدوياً'}
         </div>
       </div>
@@ -507,7 +511,7 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
                 { name: 'الاجتماعيات', desc: 'تاريخ المملكة والوطن' },
                 { name: 'اللغة الإنجليزية', desc: 'English Super Goal 2' },
               ].map((sub, i) => {
-                const isActive = motion.activeIndex === i;
+                const isActive = (cam.currentSubject && sub.name.includes(cam.currentSubject)) || motion.activeIndex === i;
                 return (
                   <div
                     key={i}
@@ -543,7 +547,11 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
             <div className="bg-emerald-900 text-white p-1.5 rounded-lg flex items-center justify-between text-[7px] shrink-0">
               <div>
                 <div className="font-black text-[8px]">{config.schoolName || 'مدرسة عبد الملك بن مروان'} • {config.platformTitle || 'منصة البشير التعليمية'}</div>
-                <div className="text-emerald-200">ورقة عمل وملخص دراسي معتمد: الطاقة وتحولاتها • ثاني متوسط - العلوم</div>
+                <div className="text-emerald-200 truncate max-w-[220px]">
+                  {cam.currentSection?.includes('ورقة') || cam.currentSection?.includes('معاينة')
+                    ? cam.currentSection
+                    : `ورقة عمل وملخص دراسي معتمد: ${cam.currentSubject || 'العلوم'} • ثاني متوسط`}
+                </div>
               </div>
               <div className="bg-emerald-800 px-1.5 py-0.5 rounded text-[7px] font-bold">
                 ملخص دراسي رسمي
@@ -556,7 +564,7 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
                 <div className="font-bold text-amber-900">بيانات توثيق الطالب والملف:</div>
                 <div>اسم الطالب: <strong className="text-emerald-900 font-black">{cam.studentName}</strong></div>
                 <div>المدرسة: <strong>{config.schoolName || 'مدرسة عبد الملك بن مروان'}</strong></div>
-                <div>المعلم المشرف: <strong>عبد الصمد خان</strong> • الصف: <strong>ثاني متوسط</strong> • المادة: <strong>العلوم</strong></div>
+                <div>المعلم المشرف: <strong>{config.authorName || 'أ. صهيب القحطاني'}</strong> • الصف: <strong>ثاني متوسط</strong> • المادة: <strong>{cam.currentSubject || 'العلوم'}</strong></div>
               </div>
               <div className="bg-emerald-900 text-white px-2 py-1 rounded text-center shrink-0 border border-amber-400">
                 <div className="text-[6px] text-amber-300 font-bold">شعار المنصة</div>
@@ -564,30 +572,66 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
               </div>
             </div>
 
-            {/* Clean Realistic Worksheet Preview (نشاطات تمهيدية - الطاقة - ما أعرفه - ما أود معرفته - ما تعلمته) */}
+            {/* Clean Realistic Worksheet Preview */}
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-1.5 space-y-1 my-1 shrink-0">
-              <div className="bg-amber-100 text-amber-950 px-2 py-0.5 rounded text-center font-black text-[8px] border border-amber-300">
-                نشاطات تمهيدية • الطاقة وتحولاتها
-              </div>
-              <div className="grid grid-cols-3 gap-1 text-[6.5px]">
-                <div className="bg-orange-50 border border-orange-200 p-1 rounded text-center">
-                  <div className="font-black text-orange-800">💡 ما أعرفه</div>
-                  <div className="text-slate-600 mt-0.5">الطاقة في كل مكان ولها أشكال متعددة</div>
-                </div>
-                <div className="bg-blue-50 border border-blue-200 p-1 rounded text-center">
-                  <div className="font-black text-blue-800">❓ ما أود معرفته</div>
-                  <div className="text-slate-600 mt-0.5">كيف تتحول الطاقة من شكل لآخر؟</div>
-                </div>
-                <div className="bg-emerald-50 border border-emerald-200 p-1 rounded text-center">
-                  <div className="font-black text-emerald-800">🌱 ما تعلمته</div>
-                  <div className="text-slate-600 mt-0.5">القدرة على بذل شغل وإحداث تغيير</div>
-                </div>
-              </div>
+              {cam.currentSubject?.includes('اجتماعيات') || cam.currentSection?.includes('الاجتماعية') ? (
+                <>
+                  <div className="bg-emerald-100 text-emerald-950 px-2 py-0.5 rounded text-center font-black text-[8px] border border-emerald-300">
+                    ورقة عمل مادة الدراسات الاجتماعية - محلول
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 text-[6.5px]">
+                    <div className="bg-white border border-slate-200 p-1 rounded text-right">
+                      <div className="font-bold text-emerald-800">الوحدة الأولى: الدولة السعودية</div>
+                      <div className="text-slate-500">الأسئلة والتمارين المحلولة المعتمدة</div>
+                    </div>
+                    <div className="bg-white border border-slate-200 p-1 rounded text-right">
+                      <div className="font-bold text-blue-800">نماذج الأسئلة الموضوعية</div>
+                      <div className="text-slate-500">صح وخطأ واختيار من متعدد</div>
+                    </div>
+                  </div>
+                </>
+              ) : cam.currentSubject?.includes('رياضيات') || cam.currentSection?.includes('فيثاغورس') ? (
+                <>
+                  <div className="bg-blue-100 text-blue-950 px-2 py-0.5 rounded text-center font-black text-[8px] border border-blue-300">
+                    ملخص نظرية فيثاغورس والأعداد الحقيقية
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 text-[6.5px]">
+                    <div className="bg-white border border-slate-200 p-1 rounded text-right">
+                      <div className="font-bold text-blue-800">المثلث القائم والوتر</div>
+                      <div className="text-slate-500">ج² = أ² + ب² والأعداد النسبية</div>
+                    </div>
+                    <div className="bg-white border border-slate-200 p-1 rounded text-right">
+                      <div className="font-bold text-emerald-800">ثلاثيات فيثاغورس الشهيرة</div>
+                      <div className="text-slate-500">(3، 4، 5) و (5، 12، 13)</div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="bg-amber-100 text-amber-950 px-2 py-0.5 rounded text-center font-black text-[8px] border border-amber-300">
+                    نشاطات تمهيدية • الطاقة وتحولاتها
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 text-[6.5px]">
+                    <div className="bg-orange-50 border border-orange-200 p-1 rounded text-center">
+                      <div className="font-black text-orange-800">💡 ما أعرفه</div>
+                      <div className="text-slate-600 mt-0.5">الطاقة في كل مكان ولها أشكال متعددة</div>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 p-1 rounded text-center">
+                      <div className="font-black text-blue-800">❓ ما أود معرفته</div>
+                      <div className="text-slate-600 mt-0.5">كيف تتحول الطاقة من شكل لآخر؟</div>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 p-1 rounded text-center">
+                      <div className="font-black text-emerald-800">🌱 ما تعلمته</div>
+                      <div className="text-slate-600 mt-0.5">القدرة على بذل شغل وإحداث تغيير</div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Document Footer Line */}
-            <div className="text-[6px] text-slate-500 border-t border-slate-200 pt-0.5 text-center shrink-0">
-              وثيقة دراسية رسمية معتمدة للطالب: {cam.studentName} • حقوق التوثيق محفوظة لـ {config.schoolName || 'مدرسة عبد الملك بن مروان'}
+            <div className="text-[6.5px] text-emerald-800 font-bold border-t border-slate-200 pt-0.5 text-center shrink-0">
+              مطوية وورقة عمل دراسية معتمدة • {config.platformTitle || 'منصة البشير التعليمية'} • {config.schoolName || 'مدرسة عبد الملك بن مروان'}
             </div>
 
             {/* Download Button with tactile click animation */}
@@ -750,6 +794,7 @@ export const CCTVMonitorRoom: React.FC<CCTVMonitorRoomProps> = ({
           minute: '2-digit',
           second: '2-digit',
           hour12: true,
+          timeZone: 'Asia/Riyadh',
         })
       );
       setRecordingSeconds((prev) => prev + 1);
@@ -812,8 +857,8 @@ export const CCTVMonitorRoom: React.FC<CCTVMonitorRoomProps> = ({
   const handleDownloadStudentLog = (studentId?: string, studentName?: string) => {
     const targetLogs = studentId ? logs.filter((l) => l.studentId === studentId) : logs;
     const now = new Date();
-    const dateStr = now.toLocaleDateString('ar-SA');
-    const timeStr = now.toLocaleTimeString('ar-SA');
+    const dateStr = now.toLocaleDateString('ar-SA', { timeZone: 'Asia/Riyadh', day: 'numeric', month: 'long', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' });
 
     let report = `================================================================================
 تقرير رصد وتحركات الطلاب الحية - نظام كاميرات المراقبة المدرسية
@@ -897,7 +942,7 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
       currentSubject: activeSession?.currentSubject || (isLive ? 'عام' : 'غير متصل'),
       currentAction: activeSession?.currentAction || (isLive ? 'يتصفح الصفحة الرئيسية' : 'غادر المنصة للتو'),
       deviceType: activeSession?.deviceType || 'هاتف ذكي (أندرويد)',
-      lastSeen: new Date(lastSeenTs).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }),
+      lastSeen: new Date(lastSeenTs).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' }),
       lastSeenDayTime: dateInfo.full,
       lastSeenDay: dateInfo.dayOnly,
       lastSeenTime: dateInfo.timeOnly,
@@ -938,7 +983,7 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
       currentSubject: gs.currentSubject || 'عام',
       currentAction: gs.currentAction || (isLive ? 'يتصفح الصفحة الرئيسية' : 'غادر المنصة للتو'),
       deviceType: gs.deviceType || 'متصفح الجوال',
-      lastSeen: new Date(gs.lastSeen).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }),
+      lastSeen: new Date(gs.lastSeen).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Riyadh' }),
       lastSeenDayTime: dateInfo.full,
       lastSeenDay: dateInfo.dayOnly,
       lastSeenTime: dateInfo.timeOnly,
@@ -1011,7 +1056,7 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
               <div>
                 <div className="text-[10px] text-slate-400">التاريخ اليوم 📅</div>
                 <div className="font-mono font-bold text-amber-300">
-                  {new Date().toLocaleDateString('ar-SA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                  {new Date().toLocaleDateString('ar-SA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Riyadh' })}
                 </div>
               </div>
             </div>
