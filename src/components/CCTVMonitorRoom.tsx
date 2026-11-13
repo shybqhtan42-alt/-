@@ -745,6 +745,7 @@ const StudentScreenVideoPlayer: React.FC<StudentScreenVideoPlayerProps> = ({
 
 interface CCTVMonitorRoomProps {
   students: Student[];
+  onlineStudentIds?: string[];
   onlineSessions: StudentLiveSession[];
   suspensions?: StudentSuspension[];
   config: SchoolConfig;
@@ -753,6 +754,7 @@ interface CCTVMonitorRoomProps {
 
 export const CCTVMonitorRoom: React.FC<CCTVMonitorRoomProps> = ({
   students,
+  onlineStudentIds = [],
   onlineSessions,
   suspensions = [],
   config,
@@ -912,26 +914,12 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
   // Build combined camera list: registered students mapped to cameras + guest sessions
   const registeredCameras = students.map((st: Student, idx: number) => {
     const camCode = `CAM-0${idx + 1}`;
-    // Check if this student has an active session in the last 12 seconds
-    const activeSession = onlineSessions.find((s: StudentLiveSession) => {
-      if (s.studentId === st.id) return true;
-      const sName = (s.studentName || '').trim().toLowerCase();
-      const stName = (st.fullName || '').trim().toLowerCase();
-      if (!sName || !stName) return false;
-      return sName === stName || sName.includes(stName) || stName.includes(sName);
-    });
-    const isLive = Boolean(activeSession && Date.now() - activeSession.lastSeen < 12000);
+    // Match strictly by exact authenticated studentId from server's active sessions
+    const activeSession = onlineSessions.find((s: StudentLiveSession) => s.studentId === st.id);
+    const isLive = onlineStudentIds.includes(st.id) || Boolean(activeSession);
 
     // Check if student is suspended / kicked
-    const activeSuspension = suspensions.find(
-      (sp: StudentSuspension) =>
-        sp.studentId === st.id ||
-        (sp.studentName &&
-          st.fullName &&
-          (sp.studentName.trim().toLowerCase() === st.fullName.trim().toLowerCase() ||
-            sp.studentName.toLowerCase().includes(st.fullName.toLowerCase()) ||
-            st.fullName.toLowerCase().includes(sp.studentName.toLowerCase())))
-    );
+    const activeSuspension = suspensions.find((sp: StudentSuspension) => sp.studentId === st.id);
     const isSuspended = Boolean(
       activeSuspension && (activeSuspension.expiresAt === 0 || Date.now() < activeSuspension.expiresAt)
     );
@@ -967,20 +955,14 @@ ${studentName ? `الطالب المستهدف: ${studentName} (رقم المع�
     };
   });
 
-  // Guest sessions mapped to cameras (excluding any matched to registered students)
+  // Guest sessions mapped to cameras (excluding registered students)
   const guestSessions = onlineSessions.filter(
-    (s: StudentLiveSession) =>
-      !students.some((st: Student) => {
-        if (st.id === s.studentId) return true;
-        const sName = (s.studentName || '').trim().toLowerCase();
-        const stName = (st.fullName || '').trim().toLowerCase();
-        return Boolean(sName && stName && (sName === stName || sName.includes(stName) || stName.includes(sName)));
-      })
+    (s: StudentLiveSession) => !students.some((st: Student) => st.id === s.studentId)
   );
 
   const guestCameras = guestSessions.map((gs: StudentLiveSession, idx: number) => {
     const camCode = `CAM-G${idx + 1}`;
-    const isLive = Date.now() - gs.lastSeen < 25000;
+    const isLive = true; // Server /api/sync already filters onlineSessions by activeThreshold
     const activeSuspension = suspensions.find((sp: StudentSuspension) => sp.studentId === gs.studentId);
     const isSuspended = Boolean(
       activeSuspension && (activeSuspension.expiresAt === 0 || Date.now() < activeSuspension.expiresAt)

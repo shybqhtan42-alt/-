@@ -1029,7 +1029,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-800">
                     {filteredStudents.map((student) => {
-                      const isOnline = onlineStudentIds.includes(student.id) || onlineSessions.some((s) => (s.studentId === student.id || s.studentName.toLowerCase() === student.fullName.toLowerCase()) && Date.now() - s.lastSeen < 25000);
+                      const isOnline = onlineStudentIds.includes(student.id);
                       return (
                         <tr key={student.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-3.5 px-4 font-bold text-slate-900">
@@ -3195,6 +3195,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       {activeTab === 'cctv' && (
         <CCTVMonitorRoom
           students={students}
+          onlineStudentIds={onlineStudentIds}
           onlineSessions={onlineSessions || []}
           suspensions={suspensions}
           config={config}

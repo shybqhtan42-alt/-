@@ -189,35 +189,32 @@ export default function App() {
 
   // Heartbeat effect: Continuously sends live telemetry for the CCTV surveillance system
   useEffect(() => {
-    const savedName = localStorage.getItem('al_basheer_student_name');
+    const getDeviceId = () => {
+      let sid = localStorage.getItem('al_basheer_client_device_id');
+      if (!sid) {
+        sid = 'device_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('al_basheer_client_device_id', sid);
+      }
+      return sid;
+    };
 
-    // Match with registered student list
-    const matchedRegisteredStudent =
-      (currentUser.role === 'student' && currentUser.student ? currentUser.student : null) ||
-      students.find((st) => {
-        if (!savedName) return false;
-        const cleanSaved = savedName.trim().toLowerCase();
-        const cleanFull = st.fullName.trim().toLowerCase();
-        return cleanSaved === cleanFull || cleanFull.includes(cleanSaved) || cleanSaved.includes(cleanFull);
-      }) ||
-      (currentUser.role !== 'manager' && students.length > 0 ? students[0] : null);
+    // Manager browser must NEVER masquerade as a student or visitor on CCTV
+    if (currentUser.role === 'manager') {
+      const deviceSid = localStorage.getItem('al_basheer_client_device_id');
+      if (deviceSid) {
+        storageService.sendOffline(deviceSid);
+      }
+      return;
+    }
 
-    const studentId = matchedRegisteredStudent
-      ? matchedRegisteredStudent.id
-      : (() => {
-          let sid = localStorage.getItem('al_basheer_client_device_id');
-          if (!sid) {
-            sid = 'device_' + Math.random().toString(36).substring(2, 9);
-            localStorage.setItem('al_basheer_client_device_id', sid);
-          }
-          return sid;
-        })();
-
-    const resolvedStudentName = matchedRegisteredStudent
-      ? matchedRegisteredStudent.fullName
-      : (savedName || (currentUser.role === 'manager' ? 'المدير' : 'طالب يتصفح المنصة'));
-
-    const resolvedGrade = matchedRegisteredStudent?.grade || config.defaultGrade || 'ثاني متوسط';
+    const isAuthenticatedStudent = currentUser.role === 'student' && Boolean(currentUser.student?.id);
+    const studentId = isAuthenticatedStudent ? currentUser.student!.id : getDeviceId();
+    const resolvedStudentName = isAuthenticatedStudent
+      ? currentUser.student!.fullName
+      : 'زائر يتصفح المنصة';
+    const resolvedGrade = isAuthenticatedStudent
+      ? (currentUser.student!.grade || config.defaultGrade || 'ثاني متوسط')
+      : (config.defaultGrade || 'ثاني متوسط');
 
     const getTelemetry = () => ({
       studentName: resolvedStudentName,
@@ -267,7 +264,9 @@ export default function App() {
         : 'home' as const,
     });
 
-    storageService.sendHeartbeat(studentId, getTelemetry());
+    if (document.visibilityState !== 'hidden') {
+      storageService.sendHeartbeat(studentId, getTelemetry());
+    }
 
     const heartbeatInterval = setInterval(() => {
       if (document.visibilityState !== 'hidden') {
@@ -297,7 +296,7 @@ export default function App() {
       window.removeEventListener('pagehide', handleLeave);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentUser, activeTab, selectedSummary, isLoginModalOpen, config.defaultGrade, students]);
+  }, [currentUser, activeTab, selectedSummary, isLoginModalOpen, config.defaultGrade]);
 
   const handleUpdateConfig = (newConfig: SchoolConfig) => {
     setConfig(newConfig);
@@ -330,10 +329,13 @@ export default function App() {
     try {
       localStorage.setItem('al_basheer_current_user', JSON.stringify(userObj));
     } catch (_) {}
+    const deviceSid = localStorage.getItem('al_basheer_client_device_id');
     if (role === 'student' && student?.id) {
+      if (deviceSid) storageService.sendOffline(deviceSid);
       storageService.sendHeartbeat(student.id);
     }
     if (role === 'manager') {
+      if (deviceSid) storageService.sendOffline(deviceSid);
       setActiveTab('manager-panel');
     } else {
       setActiveTab('second-intermediate');

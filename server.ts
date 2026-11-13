@@ -751,7 +751,7 @@ async function startServer() {
   // Dedicated CCTV live camera feeds endpoint
   app.get('/api/presence/cameras', (req, res) => {
     const now = Date.now();
-    const activeThreshold = 10000;
+    const activeThreshold = 8000;
     const activeFeeds: LiveStudentSession[] = [];
     liveSessionsMap.forEach((session, id) => {
       // Check suspension expiry
@@ -777,32 +777,17 @@ async function startServer() {
   // 1. Full state sync endpoint (used by all devices to sync on load and poll)
   app.get('/api/sync', (req, res) => {
     const now = Date.now();
-    // Student is considered online if heartbeat was received within the last 10 seconds
-    const activeThreshold = 10000;
+    // Student is considered online only if heartbeat was received within the last 8 seconds
+    const activeThreshold = 8000;
     const onlineStudentIds: string[] = [];
     const onlineSessions: LiveStudentSession[] = [];
 
     liveSessionsMap.forEach((session, id) => {
       if (now - session.lastSeen <= activeThreshold) {
         onlineStudentIds.push(id);
-        // Also map registered student ID if matched by name or ID
-        if (Array.isArray(db.students)) {
-          const matched = db.students.find(
-            (st) =>
-              st.id === id ||
-              (session.studentName &&
-                st.fullName &&
-                (st.fullName.trim().toLowerCase() === session.studentName.trim().toLowerCase() ||
-                  st.fullName.toLowerCase().includes(session.studentName.toLowerCase()) ||
-                  session.studentName.toLowerCase().includes(st.fullName.toLowerCase())))
-          );
-          if (matched && !onlineStudentIds.includes(matched.id)) {
-            onlineStudentIds.push(matched.id);
-          }
-        }
         onlineSessions.push(session);
-      } else if (now - session.lastSeen > 30000) {
-        // cleanup stale records after 30 seconds
+      } else if (now - session.lastSeen > 20000) {
+        // cleanup stale records after 20 seconds
         liveSessionsMap.delete(id);
       }
     });
