@@ -41,10 +41,13 @@ export default function App() {
       const saved = localStorage.getItem('al_basheer_current_user');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && (parsed.role === 'student' || parsed.role === 'manager')) {
+        // Only persist manager session across reloads; students must re-login on every visit
+        if (parsed && parsed.role === 'manager') {
           return parsed;
         }
+        localStorage.removeItem('al_basheer_current_user');
       }
+      localStorage.removeItem('al_basheer_student_name');
     } catch (_) {}
     return { role: 'guest' };
   });
@@ -274,26 +277,48 @@ export default function App() {
       }
     }, 2000);
 
-    const handleLeave = () => {
+    const logoutStudentCompletely = () => {
       storageService.sendOffline(studentId);
+      if (currentUser.role === 'student') {
+        try {
+          localStorage.removeItem('al_basheer_current_user');
+          localStorage.removeItem('al_basheer_student_name');
+        } catch (_) {}
+        setSelectedSummary(null);
+        setIsLoginModalOpen(false);
+        setCurrentUser({ role: 'guest' });
+        setActiveTab('home');
+      }
+    };
+
+    const handleLeave = () => {
+      logoutStudentCompletely();
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        storageService.sendOffline(studentId);
+        logoutStudentCompletely();
       } else {
         storageService.sendHeartbeat(studentId, getTelemetry());
       }
     };
 
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted && currentUser.role === 'student') {
+        logoutStudentCompletely();
+      }
+    };
+
     window.addEventListener('beforeunload', handleLeave);
     window.addEventListener('pagehide', handleLeave);
+    window.addEventListener('pageshow', handlePageShow);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       clearInterval(heartbeatInterval);
       window.removeEventListener('beforeunload', handleLeave);
       window.removeEventListener('pagehide', handleLeave);
+      window.removeEventListener('pageshow', handlePageShow);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentUser, activeTab, selectedSummary, isLoginModalOpen, config.defaultGrade]);
@@ -327,7 +352,12 @@ export default function App() {
     const userObj: CurrentUser = { role, student };
     setCurrentUser(userObj);
     try {
-      localStorage.setItem('al_basheer_current_user', JSON.stringify(userObj));
+      if (role === 'manager') {
+        localStorage.setItem('al_basheer_current_user', JSON.stringify(userObj));
+      } else {
+        // Student sessions are strictly temporary and end on exit
+        localStorage.removeItem('al_basheer_current_user');
+      }
     } catch (_) {}
     const deviceSid = localStorage.getItem('al_basheer_client_device_id');
     if (role === 'student' && student?.id) {
@@ -348,7 +378,9 @@ export default function App() {
     }
     try {
       localStorage.removeItem('al_basheer_current_user');
+      localStorage.removeItem('al_basheer_student_name');
     } catch (_) {}
+    setSelectedSummary(null);
     setCurrentUser({ role: 'guest' });
     setActiveTab('home');
   };
