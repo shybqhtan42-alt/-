@@ -316,12 +316,26 @@ async function startServer() {
       if (rawData && rawData.startsWith('data:')) {
         try {
           const parts = rawData.split(',');
-          const mime = parts[0].match(/:(.*?);/)?.[1] || (s.attachmentType === 'image' ? 'image/png' : 'application/pdf');
+          const mime =
+            parts[0].match(/:(.*?);/)?.[1] ||
+            (s.attachmentType === 'image'
+              ? 'image/png'
+              : s.attachmentType === 'video'
+              ? 'video/webm'
+              : 'application/pdf');
           const buffer = Buffer.from(parts[1], 'base64');
           if (s.attachmentUrl && s.attachmentUrl.startsWith('/uploads/')) {
             registerFileInCacheAndDisk(s.attachmentUrl, mime, buffer);
           } else {
-            const ext = mime.includes('pdf') ? '.pdf' : mime.includes('png') ? '.png' : '.jpg';
+            const ext = mime.includes('pdf')
+              ? '.pdf'
+              : mime.includes('webm')
+              ? '.webm'
+              : mime.includes('mp4')
+              ? '.mp4'
+              : mime.includes('png')
+              ? '.png'
+              : '.jpg';
             const cleanTitle = (s.title || 'file').replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_');
             const fileName = s.attachmentName || `${cleanTitle}${ext}`;
             const fileUrl = persistUploadedFile(fileName, mime, buffer);
@@ -334,7 +348,47 @@ async function startServer() {
     }
   }
 
-  // Dedicated file delivery endpoint for /uploads/:filename with explicit Content-Type headers
+  // Helper to serve binary buffers (especially videos) with full HTTP Range (206 Partial Content) support for mobile & desktop players
+  const sendBufferWithRange = (
+    req: express.Request,
+    res: express.Response,
+    buffer: Buffer,
+    contentType: string,
+    decodedName: string,
+    isDownload: boolean
+  ) => {
+    const total = buffer.length;
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    if (isDownload) {
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(decodedName)}"`);
+    } else {
+      res.setHeader('Content-Disposition', 'inline');
+    }
+
+    const rangeHeader = req.headers.range;
+    if (!isDownload && rangeHeader && rangeHeader.startsWith('bytes=')) {
+      const parts = rangeHeader.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
+      if (!isNaN(start) && start >= 0 && start < total) {
+        const safeEnd = !isNaN(end) && end >= start && end < total ? end : total - 1;
+        const chunk = buffer.subarray(start, safeEnd + 1);
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${safeEnd}/${total}`);
+        res.setHeader('Content-Length', String(chunk.length));
+        return res.send(chunk);
+      }
+      res.status(416).setHeader('Content-Range', `bytes */${total}`);
+      return res.end();
+    }
+
+    res.setHeader('Content-Length', String(total));
+    return res.send(buffer);
+  };
+
+  // Dedicated file delivery endpoint for /uploads/:filename with explicit Content-Type & Range headers
   app.get('/uploads/:filename', (req, res) => {
     const rawParam = req.params.filename;
     const decoded = decodeURIComponent(rawParam);
@@ -343,14 +397,7 @@ async function startServer() {
     // 1. Check in-memory cache first
     if (uploadedFilesCache.has(rawParam) || uploadedFilesCache.has(decoded)) {
       const cached = uploadedFilesCache.get(rawParam) || uploadedFilesCache.get(decoded)!;
-      res.setHeader('Content-Type', cached.contentType);
-      res.setHeader('Cache-Control', 'public, max-age=31536000');
-      if (isDownload) {
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(decoded)}"`);
-      } else {
-        res.setHeader('Content-Disposition', 'inline');
-      }
-      return res.send(cached.buffer);
+      return sendBufferWithRange(req, res, cached.buffer, cached.contentType, decoded, isDownload);
     }
 
     // 2. Check disk directories
@@ -417,17 +464,16 @@ async function startServer() {
           if (raw && raw.startsWith('data:')) {
             try {
               const parts = raw.split(',');
-              const mime = parts[0].match(/:(.*?);/)?.[1] || (s.attachmentType === 'image' ? 'image/jpeg' : 'application/pdf');
+              const mime =
+                parts[0].match(/:(.*?);/)?.[1] ||
+                (s.attachmentType === 'image'
+                  ? 'image/jpeg'
+                  : s.attachmentType === 'video'
+                  ? 'video/webm'
+                  : 'application/pdf');
               const buffer = Buffer.from(parts[1], 'base64');
               registerFileInCacheAndDisk(rawParam, mime, buffer);
-              res.setHeader('Content-Type', mime);
-              res.setHeader('Cache-Control', 'public, max-age=31536000');
-              if (isDownload) {
-                res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(decoded)}"`);
-              } else {
-                res.setHeader('Content-Disposition', 'inline');
-              }
-              return res.send(buffer);
+              return sendBufferWithRange(req, res, buffer, mime, decoded, isDownload);
             } catch (err) {
               console.warn('Error resurrecting file from db.summaries:', err);
             }
@@ -1348,64 +1394,195 @@ async function startServer() {
           : 'sparkles',
       }));
 
-      // Generate continuous Arabic AI teacher voiceover explanation in 1 reliable call
+      // Generate continuous Arabic AI teacher voiceover explanation with multi-tier fallback
       let fullAudio: string | null = null;
       const sceneAudios: (string | null)[] = Array(sceneCount).fill(null);
       let voiceoverWarning: string | undefined;
+      let lastTtsErrorMsg = '';
+
+      const sanitizeForTts = (raw: string): string => {
+        return raw
+          .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, ' ')
+          .replace(/\.{2,}/g, '، ')
+          .replace(/[•*#_~`<>|[\]{}]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      };
+
+      const extractAudioFromResponse = (ttsRes: any): string | null => {
+        const parts = ttsRes?.candidates?.[0]?.content?.parts;
+        if (!Array.isArray(parts)) return null;
+        for (const part of parts) {
+          if (part?.inlineData?.data && typeof part.inlineData.data === 'string') {
+            return part.inlineData.data;
+          }
+        }
+        return null;
+      };
+
+      const parseWavPcmData = (wavBuf: Buffer): { sampleRate: number; channels: number; bitsPerSample: number; pcm: Buffer } | null => {
+        if (wavBuf.length < 44 || wavBuf.toString('ascii', 0, 4) !== 'RIFF') {
+          return null;
+        }
+        const channels = wavBuf.readUInt16LE(22) || 1;
+        const sampleRate = wavBuf.readUInt32LE(24) || 24000;
+        const bitsPerSample = wavBuf.readUInt16LE(34) || 16;
+        let offset = 12;
+        while (offset + 8 <= wavBuf.length) {
+          const chunkId = wavBuf.toString('ascii', offset, offset + 4);
+          const chunkSize = wavBuf.readUInt32LE(offset + 4);
+          if (chunkId === 'data') {
+            const start = offset + 8;
+            const end = Math.min(wavBuf.length, start + chunkSize);
+            return { sampleRate, channels, bitsPerSample, pcm: wavBuf.subarray(start, end) };
+          }
+          offset += 8 + chunkSize + (chunkSize % 2);
+        }
+        return { sampleRate, channels, bitsPerSample, pcm: wavBuf.subarray(44) };
+      };
+
+      const concatWavBuffers = (wavBuffers: Buffer[]): Buffer | null => {
+        const parsedClips = wavBuffers.map(parseWavPcmData).filter(Boolean) as Array<{
+          sampleRate: number;
+          channels: number;
+          bitsPerSample: number;
+          pcm: Buffer;
+        }>;
+        if (parsedClips.length === 0) return null;
+        const { sampleRate, channels, bitsPerSample } = parsedClips[0];
+        const pauseSamples = Math.round(sampleRate * 0.28);
+        const pauseBytes = pauseSamples * channels * (bitsPerSample / 8);
+        const silenceGap = Buffer.alloc(pauseBytes);
+        const segments: Buffer[] = [];
+        parsedClips.forEach((clip, idx) => {
+          segments.push(clip.pcm);
+          if (idx < parsedClips.length - 1) segments.push(silenceGap);
+        });
+        const totalPcm = Buffer.concat(segments);
+        const header = Buffer.alloc(44);
+        header.write('RIFF', 0);
+        header.writeUInt32LE(36 + totalPcm.length, 4);
+        header.write('WAVE', 8);
+        header.write('fmt ', 12);
+        header.writeUInt32LE(16, 16);
+        header.writeUInt16LE(1, 20);
+        header.writeUInt16LE(channels, 22);
+        header.writeUInt32LE(sampleRate, 24);
+        header.writeUInt32LE(sampleRate * channels * (bitsPerSample / 8), 28);
+        header.writeUInt16LE(channels * (bitsPerSample / 8), 32);
+        header.writeUInt16LE(bitsPerSample, 34);
+        header.write('data', 36);
+        header.writeUInt32LE(totalPcm.length, 40);
+        return Buffer.concat([header, totalPcm]);
+      };
+
+      const callSingleTts = async (
+        model: 'gemini-3.8-flash-lite-tts' | 'gemini-3.8-flash-tts',
+        textInput: string,
+        withStyle: boolean
+      ): Promise<string | null> => {
+        const cleaned = sanitizeForTts(textInput);
+        if (!cleaned) return null;
+        const partPayload: any = withStyle
+          ? {
+              text: cleaned,
+              speechMetadata: {
+                style: 'Clear, warm, articulate Arabic teacher explaining a lesson smoothly',
+              },
+            }
+          : { text: cleaned };
+
+        const ttsRes = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [partPayload],
+            },
+          ],
+          config: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: safeVoiceName },
+              },
+            },
+          },
+        });
+        return extractAudioFromResponse(ttsRes);
+      };
 
       if (includeVoiceover) {
         try {
-          const fullNarrationScript = normalizedScenes
-            .map((sc: any) => sc.narrationText.trim())
-            .filter(Boolean)
-            .join(' ... ');
+          const cleanNarrations = normalizedScenes.map((sc: any) => sanitizeForTts(sc.narrationText || sc.heading));
+          const fullNarrationScript = cleanNarrations.filter(Boolean).join('، ');
 
-          for (let attempt = 0; attempt < 3; attempt++) {
+          const fullTtsStrategies: Array<{
+            model: 'gemini-3.8-flash-lite-tts' | 'gemini-3.8-flash-tts';
+            withStyle: boolean;
+            delayMs: number;
+          }> = [
+            { model: 'gemini-3.8-flash-lite-tts', withStyle: true, delayMs: 0 },
+            { model: 'gemini-3.8-flash-lite-tts', withStyle: false, delayMs: 600 },
+            { model: 'gemini-3.8-flash-tts', withStyle: false, delayMs: 900 },
+            { model: 'gemini-3.8-flash-lite-tts', withStyle: false, delayMs: 1400 },
+          ];
+
+          for (const strat of fullTtsStrategies) {
+            if (strat.delayMs > 0) {
+              await new Promise((r) => setTimeout(r, strat.delayMs));
+            }
             try {
-              const ttsRes = await ai.models.generateContent({
-                model: 'gemini-3.8-flash-lite-tts',
-                contents: [
-                  {
-                    role: 'user',
-                    parts: [
-                      {
-                        text: fullNarrationScript,
-                        speechMetadata: {
-                          style: 'Clear, warm, articulate Arabic teacher explaining a lesson smoothly with natural pauses',
-                        },
-                      },
-                    ],
-                  },
-                ],
-                config: {
-                  responseModalities: ['AUDIO'],
-                  speechConfig: {
-                    voiceConfig: {
-                      prebuiltVoiceConfig: { voiceName: safeVoiceName },
-                    },
-                  },
-                },
-              });
-              const audioBase64 =
-                ttsRes.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
-              if (audioBase64) {
-                fullAudio = audioBase64;
+              const b64 = await callSingleTts(strat.model, fullNarrationScript, strat.withStyle);
+              if (b64) {
+                fullAudio = b64;
                 break;
               }
             } catch (ttsAttemptErr: any) {
-              console.warn(`TTS attempt ${attempt + 1} error:`, ttsAttemptErr?.message || ttsAttemptErr);
-              if (attempt < 2) {
-                await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+              lastTtsErrorMsg = String(ttsAttemptErr?.message || ttsAttemptErr);
+              console.warn(`TTS strategy (${strat.model}, style=${strat.withStyle}) failed:`, lastTtsErrorMsg);
+            }
+          }
+
+          // Fallback: if unified script failed, synthesize scene-by-scene sequentially and stitch WAV cleanly
+          if (!fullAudio) {
+            const wavClips: Buffer[] = [];
+            for (let sIdx = 0; sIdx < cleanNarrations.length; sIdx++) {
+              const line = cleanNarrations[sIdx];
+              if (!line) continue;
+              let clipB64: string | null = null;
+              for (const model of ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'] as const) {
+                try {
+                  clipB64 = await callSingleTts(model, line, false);
+                  if (clipB64) break;
+                } catch (sceneErr: any) {
+                  lastTtsErrorMsg = String(sceneErr?.message || sceneErr);
+                  console.warn(`Scene ${sIdx + 1} TTS (${model}) failed:`, lastTtsErrorMsg);
+                  await new Promise((r) => setTimeout(r, 400));
+                }
+              }
+              if (clipB64) {
+                sceneAudios[sIdx] = clipB64;
+                wavClips.push(Buffer.from(clipB64, 'base64'));
+              }
+              await new Promise((r) => setTimeout(r, 200));
+            }
+
+            if (wavClips.length > 0) {
+              const merged = concatWavBuffers(wavClips);
+              if (merged) {
+                fullAudio = merged.toString('base64');
               }
             }
           }
 
-          if (!fullAudio) {
+          if (!fullAudio && !sceneAudios.some(Boolean)) {
             voiceoverWarning =
               'تعذر توليد الصوت التلقائي في هذه اللحظة بسبب ضغط الخادم، سيتم إنتاج الفيديو بنغمات هادئة مع عرض الشرح النصي داخل الفيديو.';
           }
-        } catch (ttsErr) {
-          console.warn('Optional TTS voiceover warning:', ttsErr);
+        } catch (ttsErr: any) {
+          lastTtsErrorMsg = String(ttsErr?.message || ttsErr);
+          console.warn('Optional TTS voiceover warning:', lastTtsErrorMsg);
           voiceoverWarning =
             'تعذر توليد الصوت التلقائي في هذه اللحظة، سيتم إنتاج الفيديو مع عرض الشرح النصي والموسيقى الهادئة.';
         }
@@ -1425,6 +1602,7 @@ async function startServer() {
         fullAudio,
         sceneAudios,
         voiceoverWarning,
+        ttsDebug: !fullAudio ? lastTtsErrorMsg : undefined,
       });
     } catch (err: any) {
       console.error('Error in /api/ai/generate-video:', err);

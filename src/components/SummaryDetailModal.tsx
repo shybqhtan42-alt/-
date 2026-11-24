@@ -131,10 +131,11 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
     window.print();
   };
 
-  const requiresStudentVerification =
-    typeof summary?.requiresStudentInfo === 'boolean'
-      ? summary.requiresStudentInfo
-      : (config?.requireStudentInfoOnDownload ?? true);
+  const requiresStudentVerification = isVideoAttachment
+    ? false
+    : typeof summary?.requiresStudentInfo === 'boolean'
+    ? summary.requiresStudentInfo
+    : (config?.requireStudentInfoOnDownload ?? true);
 
   const executeDownloadWithInfo = (info?: StudentDownloadInfo, format?: 'image' | 'document' | 'text') => {
     if (isVideoAttachment && effectiveVideoSrc && format !== 'text') {
@@ -592,14 +593,17 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
                 </div>
               )}
 
-              {/* Embedded video player shown immediately when opening a video lesson */}
+              {/* Embedded auto-playing video player shown immediately when opening a video lesson */}
               {!isInAppPreviewOpen && isVideoAttachment && effectiveVideoSrc && (
-                <div className="rounded-2xl overflow-hidden border border-emerald-300 bg-slate-950 mt-2 shadow-md">
+                <div className="rounded-2xl overflow-hidden border border-emerald-400 bg-black mt-2 shadow-md">
                   <video
+                    key={summary.id}
                     src={effectiveVideoSrc}
                     controls
+                    autoPlay
                     playsInline
-                    className="w-full max-h-[380px] object-contain bg-black"
+                    preload="auto"
+                    className="w-full max-h-[420px] object-contain bg-black"
                   />
                 </div>
               )}

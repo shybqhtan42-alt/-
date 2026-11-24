@@ -419,13 +419,19 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       const { base64, mimeType } = await compressImageFile(file);
       setAttachmentBase64(isVid ? '' : base64);
 
+      if (isVid) {
+        setSummaryCategory('الشروحات');
+        setSummaryRequiresStudentInfo(false);
+        setSummaryIsImportant(false);
+      }
+
       // Upload file directly to server so it is saved to disk and served via /uploads/
       const uploadRes = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fileName: file.name,
-          fileType: mimeType,
+          fileType: mimeType || (isVid ? 'video/webm' : undefined),
           fileData: base64,
         }),
       });
@@ -434,10 +440,19 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         if (uploadData.url) {
           setAttachmentUrl(uploadData.url);
           showToast(`تم رفع وحفظ ${isVid ? 'الفيديو' : isImg ? 'الصورة' : 'الملف'} بنجاح: ${file.name}`);
+        } else {
+          throw new Error('لم يرجع الخادم رابط الملف.');
         }
+      } else {
+        const errData = await uploadRes.json().catch(() => ({}));
+        throw new Error(errData?.error || 'فشل رفع الملف على الخادم');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('File upload warning:', err);
+      alert(`تعذر رفع الملف (${file.name}): ${err?.message || 'حجم الملف كبير جداً أو تعذر الاتصال بالخادم'}`);
+      setAttachmentName('');
+      setAttachmentUrl('');
+      setAttachmentType('none');
     } finally {
       setIsUploadingFile(false);
     }
@@ -1216,6 +1231,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       {AVAILABLE_GRADES.map((g) => (
                         <option key={g} value={g}>{g}</option>
                       ))}
+                      <option value="عام لجميع الصفوف">عام لجميع الصفوف</option>
                     </select>
                   </div>
 
@@ -1235,6 +1251,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       <option value="الدراسات الإسلامية">الدراسات الإسلامية</option>
                       <option value="اللغة الإنجليزية">اللغة الإنجليزية</option>
                       <option value="المهارات الرقمية">المهارات الرقمية</option>
+                      <option value="توجيه وإرشاد">توجيه وإرشاد</option>
                     </select>
                   </div>
 
@@ -1244,7 +1261,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                     </label>
                     <select
                       value={summaryCategory}
-                      onChange={(e) => setSummaryCategory(e.target.value as any)}
+                      onChange={(e) => {
+                        const val = e.target.value as any;
+                        setSummaryCategory(val);
+                        if (val === 'الشروحات') {
+                          setSummaryRequiresStudentInfo(false);
+                          setSummaryIsImportant(false);
+                        }
+                      }}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-emerald-950 focus:bg-white focus:border-emerald-600"
                     >
                       <option value="ملخصات">ملخصات (تظهر في خانة الملخصات)</option>

@@ -858,7 +858,6 @@ export const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
   // Publish to "الشروحات" state
   const [isPublishingVideo, setIsPublishingVideo] = useState(false);
   const [publishImportant, setPublishImportant] = useState(false);
-  const [publishRequiresInfo, setPublishRequiresInfo] = useState(false);
 
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
@@ -1038,7 +1037,7 @@ export const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
       recorder = mimeType
         ? new MediaRecorder(combinedStream, {
             mimeType,
-            videoBitsPerSecond: 2_600_000,
+            videoBitsPerSecond: 1_500_000,
           })
         : new MediaRecorder(combinedStream);
     } catch (recErr: any) {
@@ -1229,7 +1228,7 @@ export const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
 
       await storageService.addSummary({
         title: vid.title,
-        grade: vid.grade === 'عام لجميع الصفوف' ? (config.defaultGrade || 'ثاني متوسط') : vid.grade,
+        grade: vid.grade,
         subject: vid.subject,
         category: 'الشروحات',
         summaryText: explanationText,
@@ -1238,7 +1237,7 @@ export const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
         attachmentName: safeName,
         isImportant: publishImportant,
         isExclusive: publishImportant,
-        requiresStudentInfo: publishRequiresInfo,
+        requiresStudentInfo: false,
       });
 
       // Ensure الشروحات tab is enabled if manager publishes a video
@@ -1812,16 +1811,9 @@ export const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
                       />
                       <span>حصري للطلاب المسجلين فقط</span>
                     </label>
-
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={publishRequiresInfo}
-                        onChange={(e) => setPublishRequiresInfo(e.target.checked)}
-                        className="w-4 h-4 accent-emerald-700"
-                      />
-                      <span>يطلب كتابة اسم الطالب قبل التنزيل</span>
-                    </label>
+                    <span className="text-[11px] text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full">
+                      ✓ يفتح الفيديو للطالب مباشرة دون الحاجة لكتابة الاسم
+                    </span>
                   </div>
 
                   <button

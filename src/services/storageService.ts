@@ -743,11 +743,13 @@ export const storageService = {
     const summaries = this.getSummaries();
     const config = this.getConfig();
 
-    // Check if an item with identical title and subject already exists -> update it with new content/files
+    // Check if an identical item (same title, subject, grade, and category) already exists -> update it
     const existingIndex = summaries.findIndex(
       (s) =>
         (s.title || '').trim().toLowerCase() === (summary.title || '').trim().toLowerCase() &&
-        s.subject === summary.subject
+        s.subject === summary.subject &&
+        s.grade === summary.grade &&
+        (s.category || '') === (summary.category || '')
     );
 
     if (existingIndex !== -1) {
@@ -767,13 +769,14 @@ export const storageService = {
 
       this.saveSummaries(summaries);
 
-      try {
-        await fetch(`/api/summaries/${encodeURIComponent(existing.id)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedItem),
-        });
-      } catch (_) {}
+      const putRes = await fetch(`/api/summaries/${encodeURIComponent(existing.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedItem),
+      });
+      if (!putRes.ok) {
+        throw new Error('تعذر تحديث المحتوى على الخادم الرئيسي.');
+      }
 
       return updatedItem;
     }
@@ -795,28 +798,25 @@ export const storageService = {
     this.saveSummaries(summaries);
 
     // Publish to server for cross-device visibility immediately
-    try {
-      const res = await fetch('/api/summaries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSummary),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && typeof data.version === 'number') {
-          this.setLocalVersion(data.version);
-        }
-        if (data && data.summary) {
-          const list = this.getSummaries();
-          const idx = list.findIndex((s) => s.id === newSummary.id);
-          if (idx !== -1) {
-            list[idx] = data.summary;
-            this.safeSetItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(list));
-          }
-        }
+    const res = await fetch('/api/summaries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSummary),
+    });
+    if (!res.ok) {
+      throw new Error('تعذر حفظ ونشر المحتوى على الخادم لجميع الجوالات.');
+    }
+    const data = await res.json();
+    if (data && typeof data.version === 'number') {
+      this.setLocalVersion(data.version);
+    }
+    if (data && data.summary) {
+      const list = this.getSummaries();
+      const idx = list.findIndex((s) => s.id === newSummary.id);
+      if (idx !== -1) {
+        list[idx] = data.summary;
+        this.safeSetItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(list));
       }
-    } catch (err) {
-      console.error('Failed to sync summary to server:', err);
     }
 
     return newSummary;

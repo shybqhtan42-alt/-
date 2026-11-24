@@ -104,6 +104,14 @@ const SECOND_INTERMEDIATE_SUBJECTS: SubjectCardDef[] = [
     borderColor: 'border-cyan-200 hover:border-cyan-500',
     description: 'أساسيات الحاسب، البرمجة، والتعامل مع الملفات الرقمية',
   },
+  {
+    name: 'توجيه وإرشاد',
+    icon: Sparkles,
+    color: 'text-rose-700',
+    bgColor: 'bg-rose-50',
+    borderColor: 'border-rose-200 hover:border-rose-500',
+    description: 'نصائح المذاكرة، التوجيه الطلابي، وشروحات عامة',
+  },
 ];
 
 export const StudentPortal: React.FC<StudentPortalProps> = ({
@@ -141,6 +149,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<'الكل' | 'الشروحات' | 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية'>('الكل');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterFavoritesOnly, setFilterFavoritesOnly] = useState<boolean>(false);
+  const [activeExplanationId, setActiveExplanationId] = useState<string | null>(null);
 
   // Reset category cleanly if manager hides الشروحات while student is browsing it
   React.useEffect(() => {
@@ -148,6 +157,16 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
       setSelectedCategory('الكل');
     }
   }, [isExplanationsEnabled, selectedCategory]);
+
+  // Helper to detect video items accurately
+  const isVideoItem = (item: SummaryItem) =>
+    item.attachmentType === 'video' ||
+    Boolean(
+      item.attachmentName?.match(/\.(webm|mp4|mov|mkv)$/i) ||
+      item.attachmentUrl?.match(/\.(webm|mp4|mov|mkv)(\?|$)/i) ||
+      item.attachmentUrl?.startsWith('data:video/') ||
+      item.attachmentData?.startsWith('data:video/')
+    );
 
   // Normalizer: strictly assigns each item to EXACTLY ONE category
   const normalizeCategory = (cat: string | undefined, attachmentType?: string): 'الشروحات' | 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية' => {
@@ -182,17 +201,20 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
     });
   }, [summaries, isExplanationsEnabled]);
 
+  const matchesSelectedGrade = (itemGrade: string) =>
+    itemGrade === selectedGrade || itemGrade === 'عام لجميع الصفوف';
+
   // Helper count function per subject
   const getSubjectItemCount = (subjectName: string) => {
     return uniqueSummaries.filter(
-      (s) => s.grade === selectedGrade && s.subject === subjectName
+      (s) => matchesSelectedGrade(s.grade) && s.subject === subjectName
     ).length;
   };
 
   // Helper count per subject and category
   const getCategoryCount = (subjectName: string, cat: 'الكل' | 'الشروحات' | 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية') => {
     return uniqueSummaries.filter((item) => {
-      if (item.grade !== selectedGrade) return false;
+      if (!matchesSelectedGrade(item.grade)) return false;
       if (subjectName !== 'الكل' && item.subject !== subjectName) return false;
       if (cat === 'الكل') return true;
       return normalizeCategory(item.category, item.attachmentType) === cat;
@@ -202,7 +224,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   // Filtering logic for the items list
   const filteredSummaries = uniqueSummaries.filter((item) => {
     // Grade matching
-    if (item.grade !== selectedGrade) return false;
+    if (!matchesSelectedGrade(item.grade)) return false;
 
     // Subject matching
     if (selectedSubject && selectedSubject !== 'الكل' && item.subject !== selectedSubject) {
@@ -707,7 +729,9 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
             {filteredSummaries.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 sm:p-12 text-center border border-slate-200 shadow-xs space-y-3">
                 <div className="w-14 h-14 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto">
-                  {selectedCategory === 'أوراق عمل' ? (
+                  {selectedCategory === 'الشروحات' ? (
+                    <PlayCircle className="w-7 h-7 text-emerald-700" />
+                  ) : selectedCategory === 'أوراق عمل' ? (
                     <FileText className="w-7 h-7 text-emerald-700" />
                   ) : selectedCategory === 'الكتب الدراسية' ? (
                     <BookMarked className="w-7 h-7 text-blue-700" />
@@ -717,7 +741,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                 </div>
 
                 <h4 className="font-bold text-slate-900 text-base">
-                  لا توجد ملفات مرفوعة حالياً في قسم «{selectedCategory}» لمادة ({selectedSubject === 'الكل' ? 'المواد' : selectedSubject})
+                  لا توجد شروحات أو ملفات مرفوعة حالياً في قسم «{selectedCategory}» لمادة ({selectedSubject === 'الكل' ? 'المواد' : selectedSubject})
                 </h4>
 
                 <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
@@ -741,6 +765,181 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                   </button>
                 </div>
               </div>
+            ) : selectedCategory === 'الشروحات' ? (
+              /* DIRECT INSTANT VIDEO THEATER FOR «الشروحات» — opens & plays right away like a video without asking for name */
+              (() => {
+                const activeVid =
+                  filteredSummaries.find((s) => s.id === activeExplanationId) ||
+                  filteredSummaries[0];
+                const activeExclusive = Boolean(
+                  activeVid.isImportant || activeVid.isExclusive
+                );
+                const activeLocked = activeExclusive && currentUser.role === 'guest';
+                const activeVideoSrc =
+                  activeVid.attachmentUrl ||
+                  activeVid.attachmentData ||
+                  (activeVid.attachmentName
+                    ? `/uploads/${encodeURIComponent(activeVid.attachmentName)}`
+                    : '');
+                const activeDownloadHref = activeVideoSrc.startsWith('/uploads/')
+                  ? `${activeVideoSrc}?download=1`
+                  : activeVideoSrc;
+
+                return (
+                  <div className="space-y-5">
+                    {/* Instant Featured Video Player */}
+                    <div className="bg-slate-950 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-emerald-500/60 shadow-xl text-white">
+                      {activeLocked ? (
+                        <div className="p-8 text-center space-y-4">
+                          <div className="w-14 h-14 bg-amber-400/20 text-amber-300 rounded-2xl flex items-center justify-center mx-auto border border-amber-400/30">
+                            <Lock className="w-7 h-7" />
+                          </div>
+                          <h4 className="text-base font-black text-white">{activeVid.title}</h4>
+                          <p className="text-xs text-slate-300 max-w-md mx-auto">
+                            هذا الشرح المرئي مخصص لطلاب المدرسة المسجلين. سجّل دخولك بحساب الطالب لمشاهدته مباشرة.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={onOpenLogin}
+                            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black cursor-pointer"
+                          >
+                            تسجيل الدخول لمشاهدة الشرح
+                          </button>
+                        </div>
+                      ) : activeVideoSrc && isVideoItem(activeVid) ? (
+                        <div className="bg-black">
+                          <video
+                            key={activeVid.id}
+                            src={activeVideoSrc}
+                            controls
+                            autoPlay
+                            playsInline
+                            preload="auto"
+                            className="w-full max-h-[480px] object-contain mx-auto bg-black"
+                          />
+                        </div>
+                      ) : (
+                        <div className="p-6 bg-slate-900 text-right space-y-2">
+                          <h4 className="font-black text-base text-emerald-300">{activeVid.title}</h4>
+                          <p className="text-xs sm:text-sm text-slate-200 whitespace-pre-line leading-relaxed">
+                            {activeVid.summaryText}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Direct Player Info & Instant Download Bar (no name prompt!) */}
+                      <div className="p-4 sm:p-5 bg-slate-900/95 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-emerald-300">
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/30">
+                              {activeVid.subject}
+                            </span>
+                            <span>{activeVid.grade}</span>
+                            <span>·</span>
+                            <span>{activeVid.dateAdded}</span>
+                          </div>
+                          <h3 className="text-sm sm:text-base font-black text-white truncate">
+                            {activeVid.title}
+                          </h3>
+                        </div>
+
+                        {!activeLocked && activeVideoSrc && isVideoItem(activeVid) && (
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <a
+                              href={activeDownloadHref}
+                              download={activeVid.attachmentName || `${activeVid.title}.webm`}
+                              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition cursor-pointer"
+                            >
+                              <Download className="w-4 h-4" />
+                              <span>تحميل الفيديو</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => onToggleFavorite(activeVid.id)}
+                              className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer border border-slate-700"
+                            >
+                              {favorites.includes(activeVid.id) ? (
+                                <BookmarkCheck className="w-4 h-4 text-amber-400 fill-amber-400" />
+                              ) : (
+                                <Bookmark className="w-4 h-4" />
+                              )}
+                              <span>المفضلة</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Playlist of all explanation videos in this subject */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredSummaries.map((item, idx) => {
+                        const isSelected = item.id === activeVid.id;
+                        const itemVideoSrc =
+                          item.attachmentUrl ||
+                          item.attachmentData ||
+                          (item.attachmentName
+                            ? `/uploads/${encodeURIComponent(item.attachmentName)}`
+                            : '');
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => {
+                              setActiveExplanationId(item.id);
+                              window.scrollTo({ top: 180, behavior: 'smooth' });
+                            }}
+                            className={`rounded-2xl overflow-hidden border-2 transition-all cursor-pointer flex flex-col justify-between bg-white shadow-xs hover:shadow-md ${
+                              isSelected
+                                ? 'border-emerald-600 ring-2 ring-emerald-500/20'
+                                : 'border-slate-200 hover:border-emerald-400'
+                            }`}
+                          >
+                            {itemVideoSrc && isVideoItem(item) && (
+                              <div className="relative bg-slate-950 aspect-video overflow-hidden">
+                                <video
+                                  src={itemVideoSrc}
+                                  preload="metadata"
+                                  muted
+                                  playsInline
+                                  className="w-full h-full object-cover opacity-85"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-center justify-center">
+                                  <div className="w-12 h-12 rounded-full bg-emerald-600/95 text-white flex items-center justify-center shadow-lg">
+                                    <PlayCircle className="w-7 h-7" />
+                                  </div>
+                                </div>
+                                <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/70 text-white text-[10px] font-black">
+                                  فيديو {idx + 1}
+                                </span>
+                                {isSelected && (
+                                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-black">
+                                    يُعرض الآن ✓
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            <div className="p-3.5 space-y-1.5">
+                              <div className="flex items-center justify-between text-[11px] font-bold text-emerald-800">
+                                <span>{item.subject}</span>
+                                <span className="text-slate-400">{item.dateAdded}</span>
+                              </div>
+                              <h4 className="font-black text-sm text-slate-900 line-clamp-2">
+                                {item.title}
+                              </h4>
+                              <div className="pt-1 flex items-center justify-between text-xs font-extrabold text-emerald-700">
+                                <span className="flex items-center gap-1">
+                                  <PlayCircle className="w-4 h-4" />
+                                  <span>{isSelected ? 'يعمل في المشغّل أعلاه' : 'اضغط للتشغيل فوراً'}</span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
               /* Items Grid */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
