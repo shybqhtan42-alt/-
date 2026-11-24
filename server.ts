@@ -1,7 +1,9 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
+import { GoogleGenAI, Type } from '@google/genai';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -1146,6 +1148,254 @@ async function startServer() {
     }
     saveDatabase();
     res.json({ success: true, version: db.version, deletedId: id });
+  });
+
+  // 6. Manager-only Free 20-Second AI Video Script & Voiceover Generator (Server-side Gemini)
+  app.post('/api/ai/generate-video', async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({
+          error: 'مفتاح خدمة الذكاء الاصطناعي غير مضبوط على الخادم (GEMINI_API_KEY).',
+        });
+      }
+
+      const {
+        topic,
+        grade = db.config?.defaultGrade || 'ثاني متوسط',
+        subject = 'العلوم',
+        style = 'تعليمي احترافي',
+        includeVoiceover = true,
+      } = req.body || {};
+
+      if (!topic || typeof topic !== 'string' || topic.trim().length < 3) {
+        return res.status(400).json({
+          error: 'يرجى كتابة موضوع أو فكرة الفيديو (3 أحرف على الأقل).',
+        });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+      });
+
+      const schoolName = db.config?.schoolName || 'مدرسة عبد الملك بن مروان';
+      const platformTitle = db.config?.platformTitle || 'البشير التعليمي';
+
+      const prompt = `أنت مخرج ومصمم محتوى تعليمي محترف باللغة العربية الفصحى الواضحة.
+المطلوب: تصميم سيناريو فيديو تعليمي قصير مدته 20 ثانية بالضبط (4 مشاهد متسلسلة × 5 ثوانٍ لكل مشهد).
+معلومات الفيديو:
+- الموضوع المطلوب: "${topic.trim()}"
+- الصف الدراسي: ${grade}
+- المادة: ${subject}
+- الأسلوب البصري: ${style}
+- المدرسة والمنصة: ${schoolName} • ${platformTitle}
+
+شروط دقيقة للمحتوى:
+1. قسّم الفيديو إلى 4 مشاهد فقط، مدة كل مشهد 5 ثوانٍ بالضبط (المجموع = 20 ثانية).
+2. اجعل عناوين المشاهد قصيرة وواضحة (3 إلى 6 كلمات) حتى تظهر بشكل جذاب داخل الفيديو.
+3. اجعل نقاط الشرح في كل مشهد (2 إلى 3 نقاط قصيرة لا تتجاوز 9 كلمات للنقطة الواحدة) منظمة وواضحة للقراءة السريعة.
+4. اكتب نص التعليق الصوتي (narrationText) لكل مشهد ليكون سلساً باللغة العربية وينطق خلال 4 ثوانٍ تقريباً.
+5. اختر لكل مشهد رمزاً بصرياً مناسباً من القائمة المحددة فقط.`;
+
+      const runScriptWithRetry = async () => {
+        let lastErr: any;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            return await ai.models.generateContent({
+              model: 'gemini-4-hydrogen',
+              contents: prompt,
+              config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    videoTitle: {
+                      type: Type.STRING,
+                      description: 'عنوان رئيسي جذاب للفيديو بالعربية لا يتجاوز 8 كلمات',
+                    },
+                    subtitle: {
+                      type: Type.STRING,
+                      description: 'وصف مختصر يظهر أسفل العنوان مثل المادة والصف',
+                    },
+                    scenes: {
+                      type: Type.ARRAY,
+                      description: '4 مشاهد بالضبط مدة كل منها 5 ثوانٍ ليصبح الإجمالي 20 ثانية',
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          sceneNumber: { type: Type.INTEGER },
+                          durationSeconds: { type: Type.INTEGER },
+                          highlightBadge: {
+                            type: Type.STRING,
+                            description: 'شارة قصيرة للمشهد مثل: المقدمة أو الفكرة الأساسية أو الخلاصة',
+                          },
+                          heading: {
+                            type: Type.STRING,
+                            description: 'عنوان المشهد بالعربية من 3 إلى 6 كلمات',
+                          },
+                          bodyPoints: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING },
+                            description: 'نقطتان أو ثلاث نقاط مركزة وقصيرة بالعربية',
+                          },
+                          narrationText: {
+                            type: Type.STRING,
+                            description: 'جملة التعليق الصوتي العربية المناسبة للمشهد خلال 4 ثوانٍ',
+                          },
+                          visualMotif: {
+                            type: Type.STRING,
+                            enum: ['sparkles', 'geometry', 'science', 'book', 'rocket', 'award'],
+                          },
+                        },
+                        required: [
+                          'sceneNumber',
+                          'durationSeconds',
+                          'highlightBadge',
+                          'heading',
+                          'bodyPoints',
+                          'narrationText',
+                          'visualMotif',
+                        ],
+                      },
+                    },
+                  },
+                  required: ['videoTitle', 'subtitle', 'scenes'],
+                },
+              },
+            });
+          } catch (attemptErr: any) {
+            lastErr = attemptErr;
+            const msg = String(attemptErr?.message || '');
+            const isTransient = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('429');
+            if (!isTransient || attempt === 2) break;
+            await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+          }
+        }
+        throw lastErr;
+      };
+
+      const scriptResponse = await runScriptWithRetry();
+
+      const rawText = scriptResponse.text;
+      if (!rawText) {
+        return res.status(502).json({ error: 'لم يستجب نموذج الذكاء الاصطناعي بمحتوى صالح.' });
+      }
+
+      const plan = JSON.parse(rawText);
+      const scenes = Array.isArray(plan.scenes) ? plan.scenes.slice(0, 4) : [];
+      if (scenes.length === 0) {
+        return res.status(502).json({ error: 'تعذر توليد مشاهد الفيديو، يرجى المحاولة مرة أخرى.' });
+      }
+
+      // Normalize strictly to 4 scenes x 5 seconds = 20 seconds total
+      while (scenes.length < 4) {
+        const last = scenes[scenes.length - 1];
+        scenes.push({
+          ...last,
+          sceneNumber: scenes.length + 1,
+          durationSeconds: 5,
+          highlightBadge: 'الخلاصة',
+        });
+      }
+      const normalizedScenes = scenes.map((sc: any, idx: number) => ({
+        sceneNumber: idx + 1,
+        durationSeconds: 5,
+        highlightBadge: String(sc.highlightBadge || `المشهد ${idx + 1}`),
+        heading: String(sc.heading || plan.videoTitle || topic.trim()),
+        bodyPoints: Array.isArray(sc.bodyPoints)
+          ? sc.bodyPoints.slice(0, 3).map((p: any) => String(p))
+          : [String(sc.narrationText || topic.trim())],
+        narrationText: String(sc.narrationText || sc.heading || topic.trim()),
+        visualMotif: ['sparkles', 'geometry', 'science', 'book', 'rocket', 'award'].includes(
+          sc.visualMotif
+        )
+          ? sc.visualMotif
+          : 'sparkles',
+      }));
+
+      // Generate free AI voiceover audio clips (WAV base64) per scene if requested
+      const sceneAudios: (string | null)[] = [null, null, null, null];
+      let voiceoverWarning: string | undefined;
+
+      if (includeVoiceover) {
+        try {
+          const ttsResults = await Promise.allSettled(
+            normalizedScenes.map(async (scene: any) => {
+              const ttsRes = await ai.models.generateContent({
+                model: 'gemini-3.8-flash-lite-tts',
+                contents: [
+                  {
+                    role: 'user',
+                    parts: [
+                      {
+                        text: scene.narrationText,
+                        speechMetadata: {
+                          style: 'Clear, warm Arabic educational teacher tone, brisk pace',
+                        },
+                      },
+                    ],
+                  },
+                ],
+                config: {
+                  responseModalities: ['AUDIO'],
+                  speechConfig: {
+                    voiceConfig: {
+                      prebuiltVoiceConfig: { voiceName: 'Charon' },
+                    },
+                  },
+                },
+              });
+              const audioBase64 =
+                ttsRes.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+              return audioBase64;
+            })
+          );
+
+          ttsResults.forEach((result, index) => {
+            if (result.status === 'fulfilled' && result.value) {
+              sceneAudios[index] = result.value;
+            }
+          });
+
+          if (sceneAudios.every((a) => !a)) {
+            voiceoverWarning =
+              'تعذر توليد الصوت التلقائي حالياً، سيتم إنتاج الفيديو مع موسيقى تعليمية هادئة.';
+          }
+        } catch (ttsErr) {
+          console.warn('Optional TTS voiceover warning:', ttsErr);
+          voiceoverWarning =
+            'تعذر توليد الصوت التلقائي حالياً، سيتم إنتاج الفيديو مع موسيقى تعليمية هادئة.';
+        }
+      }
+
+      return res.json({
+        success: true,
+        totalDurationSeconds: 20,
+        plan: {
+          videoTitle: String(plan.videoTitle || topic.trim()),
+          subtitle: String(plan.subtitle || `${subject} • ${grade}`),
+          schoolName,
+          platformTitle,
+          scenes: normalizedScenes,
+        },
+        sceneAudios,
+        voiceoverWarning,
+      });
+    } catch (err: any) {
+      console.error('Error in /api/ai/generate-video:', err);
+      const rawMsg = String(err?.message || '');
+      const isOverloaded =
+        rawMsg.includes('503') ||
+        rawMsg.includes('UNAVAILABLE') ||
+        rawMsg.includes('high demand') ||
+        rawMsg.includes('429');
+      return res.status(isOverloaded ? 503 : 500).json({
+        error: isOverloaded
+          ? 'خادم الذكاء الاصطناعي مزدحم مؤقتاً في هذه اللحظة، يرجى إعادة المحاولة بعد ثوانٍ قليلة.'
+          : 'تعذر إتمام الطلب عبر خادم الذكاء الاصطناعي حالياً، يرجى المحاولة مرة أخرى.',
+      });
+    }
   });
 
   // --- VITE DEV OR PRODUCTION STATIC SERVING ---

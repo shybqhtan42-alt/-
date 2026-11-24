@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Student, SummaryItem, SchoolConfig, AVAILABLE_GRADES, StudentLiveSession, StudentSuspension } from '../types';
 import { storageService } from '../services/storageService';
 import { CCTVMonitorRoom } from './CCTVMonitorRoom';
+import { AIVideoStudio } from './AIVideoStudio';
 import { 
   Users, 
   FilePlus, 
@@ -38,7 +39,8 @@ import {
   ShieldCheck,
   Download,
   Database,
-  Video
+  Video,
+  Film
 } from 'lucide-react';
 import { APP_IMAGES } from '../assets/images';
 
@@ -65,7 +67,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   onlineSessions = [],
   suspensions = [],
 }) => {
-  const [activeTab, setActiveTab] = useState<'students' | 'summaries' | 'images' | 'settings' | 'backup' | 'cctv'>('students');
+  const [activeTab, setActiveTab] = useState<'students' | 'summaries' | 'images' | 'settings' | 'backup' | 'cctv' | 'ai-video'>('students');
 
   // Student Form State
   const [isAddingStudent, setIsAddingStudent] = useState(false);
@@ -720,6 +722,19 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               <span>كاميرات المراقبة الحية</span>
               <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
             </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('ai-video')}
+            className={`flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all text-center cursor-pointer ${
+              activeTab === 'ai-video'
+                ? 'bg-gradient-to-l from-emerald-800 to-teal-700 text-white shadow-md border border-emerald-500 ring-2 ring-emerald-500/25'
+                : 'text-emerald-900 bg-emerald-50/90 hover:bg-emerald-100 border border-emerald-200/80'
+            }`}
+          >
+            <Film className={`w-4 h-4 shrink-0 ${activeTab === 'ai-video' ? 'text-emerald-200' : 'text-emerald-700'}`} />
+            <span className="truncate">الذكاء الاصطناعي (فيديو 20 ث)</span>
           </button>
         </div>
       </div>
@@ -3202,6 +3217,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           onRefresh={onRefreshStudents}
         />
       )}
+
+      {/* TAB 7: MANAGER-ONLY AI FREE 20-SECOND VIDEO STUDIO */}
+      {activeTab === 'ai-video' && <AIVideoStudio config={config} />}
     </div>
   );
 };
