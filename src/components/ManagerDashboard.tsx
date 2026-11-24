@@ -88,7 +88,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [summaryTitle, setSummaryTitle] = useState('');
   const [summaryGrade, setSummaryGrade] = useState<string>(config.defaultGrade || 'ثاني متوسط');
   const [summarySubject, setSummarySubject] = useState('العلوم');
-  const [summaryCategory, setSummaryCategory] = useState<'ملخصات' | 'أوراق عمل' | 'الكتب الدراسية'>('ملخصات');
+  const [summaryCategory, setSummaryCategory] = useState<'ملخصات' | 'أوراق عمل' | 'الكتب الدراسية' | 'الشروحات'>('ملخصات');
   const [summaryText, setSummaryText] = useState('');
   const [summaryIsImportant, setSummaryIsImportant] = useState<boolean>(true);
   const [summaryRequiresStudentInfo, setSummaryRequiresStudentInfo] = useState<boolean>(true);
@@ -97,7 +97,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [attachmentUrl, setAttachmentUrl] = useState<string>('');
   const [attachmentBase64, setAttachmentBase64] = useState<string>('');
   const [attachmentName, setAttachmentName] = useState<string>('');
-  const [attachmentType, setAttachmentType] = useState<'image' | 'pdf' | 'document' | 'none'>('none');
+  const [attachmentType, setAttachmentType] = useState<'image' | 'pdf' | 'document' | 'video' | 'none'>('none');
 
   // Media / Logo / Banner State (For Manager Only)
   const [logoPreview, setLogoPreview] = useState<string>(config.customLogoUrl || '');
@@ -409,14 +409,15 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
     setAttachmentName(file.name);
     const isImg = file.type.startsWith('image/');
+    const isVid = file.type.startsWith('video/') || Boolean(file.name.match(/\.(webm|mp4|mov|mkv)$/i));
     const isDoc = file.name.endsWith('.doc') || file.name.endsWith('.docx') || file.name.endsWith('.ppt') || file.name.endsWith('.pptx');
-    const computedType = isImg ? 'image' : isDoc ? 'document' : 'pdf';
+    const computedType = isVid ? 'video' : isImg ? 'image' : isDoc ? 'document' : 'pdf';
     setAttachmentType(computedType);
 
     setIsUploadingFile(true);
     try {
       const { base64, mimeType } = await compressImageFile(file);
-      setAttachmentBase64(base64);
+      setAttachmentBase64(isVid ? '' : base64);
 
       // Upload file directly to server so it is saved to disk and served via /uploads/
       const uploadRes = await fetch('/api/upload', {
@@ -432,7 +433,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         const uploadData = await uploadRes.json();
         if (uploadData.url) {
           setAttachmentUrl(uploadData.url);
-          showToast(`تم رفع وحفظ ${isImg ? 'الصورة' : 'الملف'} بنجاح: ${file.name}`);
+          showToast(`تم رفع وحفظ ${isVid ? 'الفيديو' : isImg ? 'الصورة' : 'الملف'} بنجاح: ${file.name}`);
         }
       }
     } catch (err) {
@@ -734,7 +735,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             }`}
           >
             <Film className={`w-4 h-4 shrink-0 ${activeTab === 'ai-video' ? 'text-emerald-200' : 'text-emerald-700'}`} />
-            <span className="truncate">الذكاء الاصطناعي (فيديو 20 ث)</span>
+            <span className="truncate">الذكاء الاصطناعي (صناعة فيديو)</span>
           </button>
         </div>
       </div>
@@ -1115,6 +1116,44 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  const newVal = config.isExplanationsEnabled === false;
+                  const updated: SchoolConfig = {
+                    ...config,
+                    isExplanationsEnabled: newVal,
+                    isManagerConfigured: true,
+                    lastUpdatedTimestamp: Date.now(),
+                  };
+                  setSettingsForm((prev) => ({ ...prev, isExplanationsEnabled: newVal }));
+                  storageService.saveConfig(updated);
+                  onUpdateConfig(updated);
+                  showToast(
+                    newVal
+                      ? 'تم إظهار خانة «الشروحات» وتعميمها على جميع الجوالات بنجاح!'
+                      : 'تم إخفاء خانة «الشروحات» عن الطلاب في جميع الجوالات بنجاح!'
+                  );
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border ${
+                  config.isExplanationsEnabled !== false
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                    : 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
+                }`}
+                title="التحكم في إظهار أو إخفاء خانة الشروحات للطلاب في جميع الجوالات"
+              >
+                {config.isExplanationsEnabled !== false ? (
+                  <Eye className="w-3.5 h-3.5" />
+                ) : (
+                  <EyeOff className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {config.isExplanationsEnabled !== false
+                    ? 'خانة الشروحات: ظاهرة ✓'
+                    : 'خانة الشروحات: مخفية'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
                   const newVal = !Boolean(config.isLatestSpotlightEnabled);
                   const updated: SchoolConfig = {
                     ...config,
@@ -1151,7 +1190,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>{isAddingSummary ? 'إلغاء' : 'إضافة ملخص / ملف جديد'}</span>
+                <span>{isAddingSummary ? 'إلغاء' : 'إضافة ملخص / شرح / ملف جديد'}</span>
               </button>
             </div>
           </div>
@@ -1209,6 +1248,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-emerald-950 focus:bg-white focus:border-emerald-600"
                     >
                       <option value="ملخصات">ملخصات (تظهر في خانة الملخصات)</option>
+                      <option value="الشروحات">الشروحات (تظهر في خانة الشروحات عند الطالب)</option>
                       <option value="أوراق عمل">أوراق عمل (تظهر في خانة أوراق العمل فقط)</option>
                       <option value="الكتب الدراسية">الكتب الدراسية (تظهر في خانة الكتب الدراسية فقط)</option>
                     </select>
@@ -1306,7 +1346,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
                       <Upload className="w-4 h-4 text-emerald-700" />
-                      <span>إرفاق ملف ورقة عمل، PDF، مستند، أو صورة دراسية</span>
+                      <span>إرفاق فيديو شرح، ورقة عمل، PDF، مستند، أو صورة دراسية</span>
                     </div>
                     {isUploadingFile && (
                       <span className="text-[11px] text-amber-700 font-bold flex items-center gap-1 animate-pulse">
@@ -1318,7 +1358,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
                   <input
                     type="file"
-                    accept="application/pdf,image/*,.doc,.docx,.ppt,.pptx"
+                    accept="application/pdf,image/*,video/webm,video/mp4,video/*,.doc,.docx,.ppt,.pptx"
                     onChange={handleFileUpload}
                     className="text-xs text-slate-600 file:mr-0 file:ml-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-700 file:text-white hover:file:bg-emerald-800 cursor-pointer"
                   />
@@ -3218,8 +3258,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         />
       )}
 
-      {/* TAB 7: MANAGER-ONLY AI FREE 20-SECOND VIDEO STUDIO */}
-      {activeTab === 'ai-video' && <AIVideoStudio config={config} />}
+      {/* TAB 7: MANAGER-ONLY AI FREE VIDEO STUDIO */}
+      {activeTab === 'ai-video' && (
+        <AIVideoStudio
+          config={config}
+          onUpdateConfig={onUpdateConfig}
+          onRefreshSummaries={onRefreshSummaries}
+        />
+      )}
     </div>
   );
 };

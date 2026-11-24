@@ -56,6 +56,7 @@ const DEFAULT_CONFIG = {
   downloadStampPlacement: 'header' as const,
   defaultTeacherName: 'صهيب القحطاني',
   isLiveMonitoringEnabled: true,
+  isExplanationsEnabled: true,
 };
 
 const INITIAL_SUMMARIES = [
@@ -232,9 +233,9 @@ function saveDatabase() {
 async function startServer() {
   const app = express();
 
-  // Middleware for parsing JSON with generous limit for base64 images/files
-  app.use(express.json({ limit: '25mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+  // Middleware for parsing JSON with generous limit for base64 images/files/videos
+  app.use(express.json({ limit: '60mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '60mb' }));
 
   // High-performance file cache to ensure all uploaded images and documents remain available across restarts
   const uploadedFilesCache = new Map<string, { buffer: Buffer; contentType: string }>();
@@ -259,7 +260,17 @@ async function startServer() {
 
   // Helper to store file buffer to memory and all disk locations
   const persistUploadedFile = (fileName: string, mimeType: string, buffer: Buffer): string => {
-    const ext = path.extname(fileName) || (mimeType.includes('pdf') ? '.pdf' : mimeType.includes('png') ? '.png' : '.jpg');
+    const ext =
+      path.extname(fileName) ||
+      (mimeType.includes('pdf')
+        ? '.pdf'
+        : mimeType.includes('webm')
+        ? '.webm'
+        : mimeType.includes('mp4')
+        ? '.mp4'
+        : mimeType.includes('png')
+        ? '.png'
+        : '.jpg');
     const baseRaw = path.basename(fileName, ext);
     const safeBase = baseRaw.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_');
     const uniqueName = `${Date.now()}-${safeBase}${ext}`;
@@ -367,6 +378,12 @@ async function startServer() {
           const mime =
             ext === '.pdf'
               ? 'application/pdf'
+              : ext === '.webm'
+              ? 'video/webm'
+              : ext === '.mp4'
+              ? 'video/mp4'
+              : ext === '.mov'
+              ? 'video/quicktime'
               : ext === '.png'
               ? 'image/png'
               : ext === '.jpg' || ext === '.jpeg'
@@ -440,7 +457,10 @@ async function startServer() {
       const base64Data = fileData.replace(/^data:[^;]+;base64,/, '');
       const buffer = Buffer.from(base64Data, 'base64');
       const isImg = fileType?.startsWith('image/') || fileName.match(/\.(png|jpe?g|webp|gif|svg)$/i);
-      const computedType = fileType || (isImg ? 'image/png' : 'application/pdf');
+      const isVid = fileType?.startsWith('video/') || fileName.match(/\.(webm|mp4|mov)$/i);
+      const computedType =
+        fileType ||
+        (isVid ? (fileName.endsWith('.mp4') ? 'video/mp4' : 'video/webm') : isImg ? 'image/png' : 'application/pdf');
 
       const fileUrl = persistUploadedFile(fileName, computedType, buffer);
       console.log(`Saved uploaded file: ${fileName} (${buffer.length} bytes) -> ${fileUrl}`);
@@ -836,6 +856,7 @@ async function startServer() {
         ...config,
         isGamesTabEnabled: Boolean(config.isGamesTabEnabled),
         isLatestSpotlightEnabled: Boolean(config.isLatestSpotlightEnabled),
+        isExplanationsEnabled: config.isExplanationsEnabled !== undefined ? Boolean(config.isExplanationsEnabled) : true,
         isManagerConfigured: true,
       };
     }
@@ -921,6 +942,7 @@ async function startServer() {
       downloadStampPlacement: incoming.downloadStampPlacement || db.config.downloadStampPlacement || 'header',
       defaultTeacherName: incoming.defaultTeacherName || db.config.defaultTeacherName || 'صهيب القحطاني',
       isLiveMonitoringEnabled: incoming.isLiveMonitoringEnabled !== undefined ? Boolean(incoming.isLiveMonitoringEnabled) : Boolean(db.config.isLiveMonitoringEnabled ?? true),
+      isExplanationsEnabled: incoming.isExplanationsEnabled !== undefined ? Boolean(incoming.isExplanationsEnabled) : Boolean(db.config.isExplanationsEnabled ?? true),
       isManagerConfigured: true,
       lastUpdatedTimestamp: timestamp,
     };
@@ -1150,7 +1172,7 @@ async function startServer() {
     res.json({ success: true, version: db.version, deletedId: id });
   });
 
-  // 6. Manager-only Free 20-Second AI Video Script & Voiceover Generator (Server-side Gemini)
+  // 6. Manager-only Free Flexible-Duration AI Video Script & Voiceover Generator (Server-side Gemini)
   app.post('/api/ai/generate-video', async (req, res) => {
     try {
       const apiKey = process.env.GEMINI_API_KEY;
@@ -1165,6 +1187,8 @@ async function startServer() {
         grade = db.config?.defaultGrade || 'ثاني متوسط',
         subject = 'العلوم',
         style = 'تعليمي احترافي',
+        durationSeconds = 30,
+        voiceName = 'Charon',
         includeVoiceover = true,
       } = req.body || {};
 
@@ -1174,6 +1198,18 @@ async function startServer() {
         });
       }
 
+      const requestedTotalDuration = Math.max(15, Math.min(60, Math.round(Number(durationSeconds) || 30)));
+      const sceneCount = requestedTotalDuration <= 20 ? 4 : requestedTotalDuration <= 35 ? 5 : 6;
+      const baseSceneSec = Math.floor(requestedTotalDuration / sceneCount);
+      const remainderSec = requestedTotalDuration % sceneCount;
+      const sceneDurations = Array.from({ length: sceneCount }, (_, idx) =>
+        baseSceneSec + (idx < remainderSec ? 1 : 0)
+      );
+
+      const safeVoiceName = ['Charon', 'Kore', 'Puck', 'Fenrir', 'Zephyr'].includes(voiceName)
+        ? voiceName
+        : 'Charon';
+
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
@@ -1182,21 +1218,22 @@ async function startServer() {
       const schoolName = db.config?.schoolName || 'مدرسة عبد الملك بن مروان';
       const platformTitle = db.config?.platformTitle || 'البشير التعليمي';
 
-      const prompt = `أنت مخرج ومصمم محتوى تعليمي محترف باللغة العربية الفصحى الواضحة.
-المطلوب: تصميم سيناريو فيديو تعليمي قصير مدته 20 ثانية بالضبط (4 مشاهد متسلسلة × 5 ثوانٍ لكل مشهد).
-معلومات الفيديو:
+      const prompt = `أنت معلم خبير ومخرج فيديو تعليمي عربي محترف.
+المطلوب: تصميم سيناريو فيديو تعليمي منظم ومرتب باللغة العربية الفصحى الواضحة مدته الإجمالية ${requestedTotalDuration} ثانية بالضبط، مقسمة إلى ${sceneCount} مشاهد تعليمية مترابطة (${sceneDurations.join(' + ')} ثوانٍ).
+
+بيانات الفيديو:
 - الموضوع المطلوب: "${topic.trim()}"
 - الصف الدراسي: ${grade}
-- المادة: ${subject}
-- الأسلوب البصري: ${style}
+- المادة الدراسية: ${subject}
+- أسلوب العرض: ${style}
 - المدرسة والمنصة: ${schoolName} • ${platformTitle}
 
-شروط دقيقة للمحتوى:
-1. قسّم الفيديو إلى 4 مشاهد فقط، مدة كل مشهد 5 ثوانٍ بالضبط (المجموع = 20 ثانية).
-2. اجعل عناوين المشاهد قصيرة وواضحة (3 إلى 6 كلمات) حتى تظهر بشكل جذاب داخل الفيديو.
-3. اجعل نقاط الشرح في كل مشهد (2 إلى 3 نقاط قصيرة لا تتجاوز 9 كلمات للنقطة الواحدة) منظمة وواضحة للقراءة السريعة.
-4. اكتب نص التعليق الصوتي (narrationText) لكل مشهد ليكون سلساً باللغة العربية وينطق خلال 4 ثوانٍ تقريباً.
-5. اختر لكل مشهد رمزاً بصرياً مناسباً من القائمة المحددة فقط.`;
+شروط التنظيم والوضوح:
+1. أنشئ ${sceneCount} مشاهد بالضبط مرتبة بتسلسل تعليمي منطقي: (المقدمة والتشويق -> شرح المفهوم الأساسي -> أمثلة وتطبيقات -> الفائدة والاختبار السريع / الخلاصة).
+2. اجعل عنوان كل مشهد مختصراً ومركّزاً (3 إلى 6 كلمات واضحة).
+3. اجعل النقاط داخل كل مشهد (2 إلى 3 نقاط قصيرة ومرتبة لا تتجاوز 8 كلمات لكل نقطة) بحيث لا تتداخل أو تزدحم على الشاشة.
+4. اكتب لكل مشهد نص شرح صوتي (narrationText) يشرح الفكرة بوضوح للمشاهد كأن معلماً يشرح الدرس بصوت هادئ ومفهوم، ويتناسب مع مدة المشهد (~${Math.max(4, baseSceneSec - 1)} ثوانٍ لكل مشهد).
+5. اختر رمزاً بصرياً مناسباً من القائمة المحددة فقط لكل مشهد.`;
 
       const runScriptWithRetry = async () => {
         let lastErr: any;
@@ -1212,7 +1249,7 @@ async function startServer() {
                   properties: {
                     videoTitle: {
                       type: Type.STRING,
-                      description: 'عنوان رئيسي جذاب للفيديو بالعربية لا يتجاوز 8 كلمات',
+                      description: 'عنوان رئيسي جذاب ومرتب للفيديو بالعربية لا يتجاوز 8 كلمات',
                     },
                     subtitle: {
                       type: Type.STRING,
@@ -1220,15 +1257,14 @@ async function startServer() {
                     },
                     scenes: {
                       type: Type.ARRAY,
-                      description: '4 مشاهد بالضبط مدة كل منها 5 ثوانٍ ليصبح الإجمالي 20 ثانية',
+                      description: `مصفوفة من ${sceneCount} مشاهد تعليمية مرتبة`,
                       items: {
                         type: Type.OBJECT,
                         properties: {
                           sceneNumber: { type: Type.INTEGER },
-                          durationSeconds: { type: Type.INTEGER },
                           highlightBadge: {
                             type: Type.STRING,
-                            description: 'شارة قصيرة للمشهد مثل: المقدمة أو الفكرة الأساسية أو الخلاصة',
+                            description: 'شارة قصيرة للمشهد مثل: المقدمة، الشرح، مثال تطبيقي، الخلاصة',
                           },
                           heading: {
                             type: Type.STRING,
@@ -1237,11 +1273,11 @@ async function startServer() {
                           bodyPoints: {
                             type: Type.ARRAY,
                             items: { type: Type.STRING },
-                            description: 'نقطتان أو ثلاث نقاط مركزة وقصيرة بالعربية',
+                            description: 'نقطتان أو ثلاث نقاط مركزة ومرتبة بالعربية',
                           },
                           narrationText: {
                             type: Type.STRING,
-                            description: 'جملة التعليق الصوتي العربية المناسبة للمشهد خلال 4 ثوانٍ',
+                            description: 'شرح صوتي تعليمي واضح بالعربية يشرح مضمون المشهد للطلاب',
                           },
                           visualMotif: {
                             type: Type.STRING,
@@ -1250,7 +1286,6 @@ async function startServer() {
                         },
                         required: [
                           'sceneNumber',
-                          'durationSeconds',
                           'highlightBadge',
                           'heading',
                           'bodyPoints',
@@ -1283,24 +1318,23 @@ async function startServer() {
       }
 
       const plan = JSON.parse(rawText);
-      const scenes = Array.isArray(plan.scenes) ? plan.scenes.slice(0, 4) : [];
+      const scenes = Array.isArray(plan.scenes) ? plan.scenes.slice(0, sceneCount) : [];
       if (scenes.length === 0) {
         return res.status(502).json({ error: 'تعذر توليد مشاهد الفيديو، يرجى المحاولة مرة أخرى.' });
       }
 
-      // Normalize strictly to 4 scenes x 5 seconds = 20 seconds total
-      while (scenes.length < 4) {
+      while (scenes.length < sceneCount) {
         const last = scenes[scenes.length - 1];
         scenes.push({
           ...last,
           sceneNumber: scenes.length + 1,
-          durationSeconds: 5,
           highlightBadge: 'الخلاصة',
         });
       }
+
       const normalizedScenes = scenes.map((sc: any, idx: number) => ({
         sceneNumber: idx + 1,
-        durationSeconds: 5,
+        durationSeconds: sceneDurations[idx],
         highlightBadge: String(sc.highlightBadge || `المشهد ${idx + 1}`),
         heading: String(sc.heading || plan.videoTitle || topic.trim()),
         bodyPoints: Array.isArray(sc.bodyPoints)
@@ -1314,14 +1348,20 @@ async function startServer() {
           : 'sparkles',
       }));
 
-      // Generate free AI voiceover audio clips (WAV base64) per scene if requested
-      const sceneAudios: (string | null)[] = [null, null, null, null];
+      // Generate continuous Arabic AI teacher voiceover explanation in 1 reliable call
+      let fullAudio: string | null = null;
+      const sceneAudios: (string | null)[] = Array(sceneCount).fill(null);
       let voiceoverWarning: string | undefined;
 
       if (includeVoiceover) {
         try {
-          const ttsResults = await Promise.allSettled(
-            normalizedScenes.map(async (scene: any) => {
+          const fullNarrationScript = normalizedScenes
+            .map((sc: any) => sc.narrationText.trim())
+            .filter(Boolean)
+            .join(' ... ');
+
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
               const ttsRes = await ai.models.generateContent({
                 model: 'gemini-3.8-flash-lite-tts',
                 contents: [
@@ -1329,9 +1369,9 @@ async function startServer() {
                     role: 'user',
                     parts: [
                       {
-                        text: scene.narrationText,
+                        text: fullNarrationScript,
                         speechMetadata: {
-                          style: 'Clear, warm Arabic educational teacher tone, brisk pace',
+                          style: 'Clear, warm, articulate Arabic teacher explaining a lesson smoothly with natural pauses',
                         },
                       },
                     ],
@@ -1341,44 +1381,48 @@ async function startServer() {
                   responseModalities: ['AUDIO'],
                   speechConfig: {
                     voiceConfig: {
-                      prebuiltVoiceConfig: { voiceName: 'Charon' },
+                      prebuiltVoiceConfig: { voiceName: safeVoiceName },
                     },
                   },
                 },
               });
               const audioBase64 =
                 ttsRes.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
-              return audioBase64;
-            })
-          );
-
-          ttsResults.forEach((result, index) => {
-            if (result.status === 'fulfilled' && result.value) {
-              sceneAudios[index] = result.value;
+              if (audioBase64) {
+                fullAudio = audioBase64;
+                break;
+              }
+            } catch (ttsAttemptErr: any) {
+              console.warn(`TTS attempt ${attempt + 1} error:`, ttsAttemptErr?.message || ttsAttemptErr);
+              if (attempt < 2) {
+                await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+              }
             }
-          });
+          }
 
-          if (sceneAudios.every((a) => !a)) {
+          if (!fullAudio) {
             voiceoverWarning =
-              'تعذر توليد الصوت التلقائي حالياً، سيتم إنتاج الفيديو مع موسيقى تعليمية هادئة.';
+              'تعذر توليد الصوت التلقائي في هذه اللحظة بسبب ضغط الخادم، سيتم إنتاج الفيديو بنغمات هادئة مع عرض الشرح النصي داخل الفيديو.';
           }
         } catch (ttsErr) {
           console.warn('Optional TTS voiceover warning:', ttsErr);
           voiceoverWarning =
-            'تعذر توليد الصوت التلقائي حالياً، سيتم إنتاج الفيديو مع موسيقى تعليمية هادئة.';
+            'تعذر توليد الصوت التلقائي في هذه اللحظة، سيتم إنتاج الفيديو مع عرض الشرح النصي والموسيقى الهادئة.';
         }
       }
 
       return res.json({
         success: true,
-        totalDurationSeconds: 20,
+        totalDurationSeconds: requestedTotalDuration,
         plan: {
           videoTitle: String(plan.videoTitle || topic.trim()),
           subtitle: String(plan.subtitle || `${subject} • ${grade}`),
           schoolName,
           platformTitle,
+          totalDurationSeconds: requestedTotalDuration,
           scenes: normalizedScenes,
         },
+        fullAudio,
         sceneAudios,
         voiceoverWarning,
       });

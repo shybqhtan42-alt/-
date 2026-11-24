@@ -15,11 +15,11 @@ export interface SummaryItem {
   title: string;
   grade: string; // e.g. "ثاني متوسط"
   subject: string; // e.g. "العلوم", "الرياضيات", "لغتي الخالدة", "الدراسات الإسلامية", "الاجتماعيات", "اللغة الإنجليزية", "المهارات الرقمية"
-  category: string; // "الملخصات", "أوراق عمل", "شروحات ومراجعات"
+  category: string; // "ملخصات", "أوراق عمل", "الكتب الدراسية", "الشروحات"
   summaryText: string;
   attachmentUrl?: string;
   attachmentData?: string; // Persistent base64 data to guarantee image/file never disappears across container restarts
-  attachmentType?: 'image' | 'pdf' | 'document' | 'text' | 'none';
+  attachmentType?: 'image' | 'pdf' | 'document' | 'text' | 'video' | 'none';
   attachmentName?: string;
   dateAdded: string;
   isImportant?: boolean;
@@ -108,6 +108,7 @@ export interface SchoolConfig {
   downloadStampPlacement?: 'header' | 'footer' | 'watermark' | 'both'; // مكان ظهور بيانات الطالب والمعلم في الملف
   defaultTeacherName?: string; // اسم المعلم الافتراضي للملفات
   isLiveMonitoringEnabled?: boolean; // تفعيل غرفة كاميرات المراقبة المدرسية
+  isExplanationsEnabled?: boolean; // إظهار أو إخفاء خانة الشروحات للطلاب
 }
 
 export const AVAILABLE_GRADES = [

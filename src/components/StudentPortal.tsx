@@ -22,7 +22,8 @@ import {
   Languages,
   CheckCircle2,
   Download,
-  BookMarked
+  BookMarked,
+  PlayCircle
 } from 'lucide-react';
 import { APP_IMAGES } from '../assets/images';
 import { downloadSummaryDocument } from '../utils/fileExport';
@@ -134,14 +135,26 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
 
   // selectedSubject: if null, shows all subject cards as requested: "تطلع الخيارات المواد الذي يريدها"
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
-  // Content categories: 'الكل' | 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية'
-  const [selectedCategory, setSelectedCategory] = useState<'الكل' | 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية'>('الكل');
+  const isExplanationsEnabled = config.isExplanationsEnabled !== false;
+
+  // Content categories: 'الكل' | 'الشروحات' | 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية'
+  const [selectedCategory, setSelectedCategory] = useState<'الكل' | 'الشروحات' | 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية'>('الكل');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterFavoritesOnly, setFilterFavoritesOnly] = useState<boolean>(false);
 
-  // Normalizer: strictly assigns each item to EXACTLY ONE of the three categories
-  const normalizeCategory = (cat: string | undefined): 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية' => {
+  // Reset category cleanly if manager hides الشروحات while student is browsing it
+  React.useEffect(() => {
+    if (!isExplanationsEnabled && selectedCategory === 'الشروحات') {
+      setSelectedCategory('الكل');
+    }
+  }, [isExplanationsEnabled, selectedCategory]);
+
+  // Normalizer: strictly assigns each item to EXACTLY ONE category
+  const normalizeCategory = (cat: string | undefined, attachmentType?: string): 'الشروحات' | 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية' => {
     const c = (cat || '').trim();
+    if (c.includes('شرح') || c.includes('شروحات') || c.includes('فيديو') || attachmentType === 'video') {
+      return 'الشروحات';
+    }
     if (c.includes('ورق') || c.includes('أوراق') || c.includes('اوراق') || c.includes('عمل')) {
       return 'أوراق عمل';
     }
@@ -152,19 +165,22 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
     return 'ملخصات';
   };
 
-  // Deduplicate summaries array to prevent any duplicate rendering
+  // Deduplicate summaries array to prevent any duplicate rendering, hiding الشروحات globally if disabled by manager
   const uniqueSummaries = React.useMemo(() => {
     const seenIds = new Set<string>();
     const seenKeys = new Set<string>();
     return summaries.filter((item) => {
       if (!item || !item.id) return false;
+      if (!isExplanationsEnabled && normalizeCategory(item.category, item.attachmentType) === 'الشروحات') {
+        return false;
+      }
       const key = `${(item.title || '').trim()}_${(item.subject || '').trim()}_${(item.grade || '').trim()}_${(item.category || '').trim()}`;
       if (seenIds.has(item.id) || seenKeys.has(key)) return false;
       seenIds.add(item.id);
       seenKeys.add(key);
       return true;
     });
-  }, [summaries]);
+  }, [summaries, isExplanationsEnabled]);
 
   // Helper count function per subject
   const getSubjectItemCount = (subjectName: string) => {
@@ -174,12 +190,12 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   };
 
   // Helper count per subject and category
-  const getCategoryCount = (subjectName: string, cat: 'الكل' | 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية') => {
+  const getCategoryCount = (subjectName: string, cat: 'الكل' | 'الشروحات' | 'أوراق عمل' | 'ملخصات' | 'الكتب الدراسية') => {
     return uniqueSummaries.filter((item) => {
       if (item.grade !== selectedGrade) return false;
       if (subjectName !== 'الكل' && item.subject !== subjectName) return false;
       if (cat === 'الكل') return true;
-      return normalizeCategory(item.category) === cat;
+      return normalizeCategory(item.category, item.attachmentType) === cat;
     }).length;
   };
 
@@ -194,7 +210,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
     }
 
     // Category matching (الكل shows all files, otherwise matches specific category)
-    if (selectedCategory !== 'الكل' && normalizeCategory(item.category) !== selectedCategory) {
+    if (selectedCategory !== 'الكل' && normalizeCategory(item.category, item.attachmentType) !== selectedCategory) {
       return false;
     }
 
@@ -242,7 +258,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
             )}
 
             <p className="text-xs sm:text-sm text-emerald-100 leading-relaxed">
-              اختر المادة الدراسية التي تريدها، ثم حدد ما إذا كنت تريد <strong>أوراق العمل</strong>، <strong>الملخصات</strong>، أو <strong>الكتب الدراسية</strong> لتصل إلى مادتك مباشرة.
+              اختر المادة الدراسية التي تريدها، ثم حدد {isExplanationsEnabled ? <><strong>الشروحات</strong>، </> : ''}<strong>أوراق العمل</strong>، <strong>الملخصات</strong>، أو <strong>الكتب الدراسية</strong> لتصل إلى مادتك مباشرة.
             </p>
           </div>
 
@@ -517,13 +533,13 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
             </button>
           </div>
 
-          {/* THE 3 CATEGORY OPTIONS AS SPECIFIED: اوراق العمل - ملخصات - الكتب الدراسية */}
+          {/* THE CATEGORY OPTIONS: الشروحات (when enabled) - اوراق العمل - ملخصات - الكتب الدراسية */}
           <div className="space-y-3">
             <div className="text-xs font-bold text-slate-700 px-1">
               اختر نوع المحتوى الذي تريده لمادة ({selectedSubject === 'الكل' ? selectedGrade : selectedSubject}):
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+            <div className={`grid grid-cols-2 ${isExplanationsEnabled ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-2.5 sm:gap-3`}>
               {/* Option 0: الكل (جميع الملفات) */}
               <button
                 type="button"
@@ -549,10 +565,42 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                     </span>
                   </div>
                   <p className="text-[10px] sm:text-[11px] text-slate-500 leading-relaxed truncate">
-                    جميع الملفات والملخصات
+                    جميع المحتويات المتاحة
                   </p>
                 </div>
               </button>
+
+              {/* Option: الشروحات (Video Lessons & Explanations - Manager Toggleable) */}
+              {isExplanationsEnabled && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory('الشروحات')}
+                  className={`p-3 sm:p-4 rounded-2xl border-2 text-right transition-all flex items-start gap-2.5 sm:gap-3 cursor-pointer ${
+                    selectedCategory === 'الشروحات'
+                      ? 'bg-emerald-50/90 border-emerald-600 shadow-xs ring-1 ring-emerald-600/20'
+                      : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
+                  }`}
+                >
+                  <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 ${
+                    selectedCategory === 'الشروحات' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    <PlayCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </div>
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="font-extrabold text-xs sm:text-sm text-slate-900">الشروحات</span>
+                      <span className={`text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full ${
+                        selectedCategory === 'الشروحات' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {getCategoryCount(selectedSubject, 'الشروحات')}
+                      </span>
+                    </div>
+                    <p className="text-[10px] sm:text-[11px] text-slate-500 leading-relaxed truncate">
+                      فيديوهات وشروحات الدروس
+                    </p>
+                  </div>
+                </button>
+              )}
 
               {/* Option 1: أوراق العمل */}
               <button
@@ -775,9 +823,17 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                             {/* Prominent Attached File Badge */}
                             {(item.attachmentUrl || item.attachmentName) && (
                               <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50/90 text-emerald-900 text-[11px] font-bold border border-emerald-200">
-                                <FileText className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                                {item.attachmentType === 'video' || item.attachmentName?.match(/\.(webm|mp4|mov)$/i) ? (
+                                  <PlayCircle className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                                ) : (
+                                  <FileText className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                                )}
                                 <span className="truncate">
-                                  {item.attachmentName ? `ملف مرفق: ${item.attachmentName}` : 'مرفق ملف دراسي جاهز للفتح والتحميل'}
+                                  {item.attachmentType === 'video' || item.attachmentName?.match(/\.(webm|mp4|mov)$/i)
+                                    ? 'فيديو شرح مرئي جاهز للمشاهدة والتحميل'
+                                    : item.attachmentName
+                                    ? `ملف مرفق: ${item.attachmentName}`
+                                    : 'مرفق ملف دراسي جاهز للفتح والتحميل'}
                                 </span>
                               </div>
                             )}
@@ -818,8 +874,17 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                               className="flex items-center gap-1.5 font-bold text-white bg-emerald-700 hover:bg-emerald-800 px-3 py-1.5 rounded-lg transition-all shadow-xs cursor-pointer active:scale-95 text-xs"
                               title="استعراض ومعاينة الملف المعتمد داخل التطبيق دون أي خروج"
                             >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>استعراض الملف</span>
+                              {item.attachmentType === 'video' || item.attachmentName?.match(/\.(webm|mp4|mov)$/i) ? (
+                                <>
+                                  <PlayCircle className="w-3.5 h-3.5" />
+                                  <span>مشاهدة الشرح</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>استعراض الملف</span>
+                                </>
+                              )}
                             </button>
                           </div>
                         ) : (

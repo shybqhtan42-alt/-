@@ -47,6 +47,7 @@ export const DEFAULT_CONFIG: SchoolConfig = {
   downloadStampPlacement: 'header',
   defaultTeacherName: 'صهيب القحطاني',
   isLiveMonitoringEnabled: true,
+  isExplanationsEnabled: true,
 };
 
 // High quality initial educational summaries specifically prepared for ثاني متوسط

@@ -19,7 +19,8 @@ import {
   Eye,
   Image as ImageIcon,
   Maximize2,
-  Minimize2
+  Minimize2,
+  PlayCircle
 } from 'lucide-react';
 
 interface SummaryDetailModalProps {
@@ -101,11 +102,17 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
     summary.attachmentUrl?.startsWith('data:image/') ||
     summary.attachmentData?.startsWith('data:image/')
   );
+  const isVideoAttachment = summary.attachmentType === 'video' || Boolean(
+    summary.attachmentName?.match(/\.(webm|mp4|mov|mkv)$/i) ||
+    summary.attachmentUrl?.startsWith('data:video/') ||
+    summary.attachmentData?.startsWith('data:video/')
+  );
 
   const fallbackUploadUrl = summary.attachmentName ? `/uploads/${encodeURIComponent(summary.attachmentName)}` : '';
   const effectiveImageSrc = useFallbackData && summary.attachmentData
     ? summary.attachmentData
     : (summary.attachmentUrl || summary.attachmentData || blobPreviewUrl || fallbackUploadUrl || '');
+  const effectiveVideoSrc = summary.attachmentUrl || blobPreviewUrl || summary.attachmentData || fallbackUploadUrl || '';
 
   const handleCopyText = async () => {
     try {
@@ -130,6 +137,17 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
       : (config?.requireStudentInfoOnDownload ?? true);
 
   const executeDownloadWithInfo = (info?: StudentDownloadInfo, format?: 'image' | 'document' | 'text') => {
+    if (isVideoAttachment && effectiveVideoSrc && format !== 'text') {
+      const link = document.createElement('a');
+      link.href = effectiveVideoSrc.startsWith('/uploads/')
+        ? `${effectiveVideoSrc}?download=1`
+        : effectiveVideoSrc;
+      link.download = summary.attachmentName || `${summary.title || 'شرح'}.webm`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
     if (format === 'image' || (isImageAttachment && hasAttachment && format !== 'document' && format !== 'text')) {
       downloadStampedImage(summary, config, info);
     } else if (pendingDownloadType === 'text' || format === 'text') {
@@ -300,7 +318,9 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-12 h-12 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-sm">
-                    {summary.attachmentType === 'image' ? (
+                    {isVideoAttachment ? (
+                      <PlayCircle className="w-6 h-6" />
+                    ) : summary.attachmentType === 'image' ? (
                       <ImageIcon className="w-6 h-6" />
                     ) : (
                       <FileText className="w-6 h-6" />
@@ -309,13 +329,15 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-emerald-800">
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>الملف والمرفق الدراسي المعتمد</span>
+                      <span>{isVideoAttachment ? 'فيديو شرح دراسي معتمد' : 'الملف والمرفق الدراسي المعتمد'}</span>
                     </div>
                     <h4 className="text-sm font-extrabold text-slate-900 truncate">
                       {summary.attachmentName || `${summary.title}.pdf`}
                     </h4>
                     <p className="text-[11px] text-slate-500">
-                      {summary.attachmentType === 'image'
+                      {isVideoAttachment
+                        ? 'شرح مرئي وصوتي جاهز للمشاهدة والتحميل المباشر'
+                        : summary.attachmentType === 'image'
                         ? 'صورة دراسية عالية الدقة'
                         : 'مستند دراسي جاهز للتحميل والطباعة والمذاكرة'}
                     </p>
@@ -331,7 +353,7 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
                     title="تحميل وحفظ الملف المعتمد مباشرة على جهازك في مجلد التنزيلات وملفاتي دون مغادرة الصفحة"
                   >
                     <Download className="w-4 h-4" />
-                    <span>تحميل الملف المعتمد</span>
+                    <span>{isVideoAttachment ? 'تنزيل فيديو الشرح' : 'تحميل الملف المعتمد'}</span>
                   </button>
 
                   <button
@@ -456,7 +478,16 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
                   <div className={`bg-slate-100 p-2 sm:p-3 flex items-center justify-center overflow-y-auto rounded-b-xl ${
                     isFullscreenPreview ? 'flex-1 min-h-[75vh]' : 'min-h-[320px] max-h-[75vh]'
                   }`}>
-                    {isImageAttachment ? (
+                    {isVideoAttachment && effectiveVideoSrc ? (
+                      <div className="w-full flex flex-col items-center justify-center p-2 sm:p-3 bg-slate-950 rounded-xl">
+                        <video
+                          src={effectiveVideoSrc}
+                          controls
+                          playsInline
+                          className="w-full max-h-[65vh] rounded-xl bg-black"
+                        />
+                      </div>
+                    ) : isImageAttachment ? (
                       <div className="w-full flex flex-col items-center justify-center p-3 gap-3">
                         {!imageLoadFailed && effectiveImageSrc ? (
                           <img
@@ -561,8 +592,20 @@ export const SummaryDetailModal: React.FC<SummaryDetailModalProps> = ({
                 </div>
               )}
 
+              {/* Embedded video player shown immediately when opening a video lesson */}
+              {!isInAppPreviewOpen && isVideoAttachment && effectiveVideoSrc && (
+                <div className="rounded-2xl overflow-hidden border border-emerald-300 bg-slate-950 mt-2 shadow-md">
+                  <video
+                    src={effectiveVideoSrc}
+                    controls
+                    playsInline
+                    className="w-full max-h-[380px] object-contain bg-black"
+                  />
+                </div>
+              )}
+
               {/* Standard inline image preview when in-app viewer is closed */}
-              {!isInAppPreviewOpen && isImageAttachment && effectiveImageSrc && !imageLoadFailed && (
+              {!isInAppPreviewOpen && !isVideoAttachment && isImageAttachment && effectiveImageSrc && !imageLoadFailed && (
                 <div className="rounded-xl overflow-hidden border border-slate-200 bg-white mt-2 max-h-72 flex items-center justify-center p-1">
                   <img
                     src={effectiveImageSrc}
